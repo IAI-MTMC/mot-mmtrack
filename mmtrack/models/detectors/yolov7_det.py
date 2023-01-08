@@ -15,6 +15,7 @@ class YOLOv7Head(BaseModule):
         conf_thresh: float = 0.2,
         iou_thres: float = 0.6,
         init_cfg=None,
+        test_cfg=None,
         **kwargs,
     ):
         super().__init__(init_cfg)
@@ -22,6 +23,8 @@ class YOLOv7Head(BaseModule):
         self.num_classes = num_classes
         self.conf_thresh = conf_thresh
         self.iou_thres = iou_thres
+
+        self.test_cfg = test_cfg
 
     def forward(self, val_outs: torch.Tensor):
         return val_outs
@@ -51,7 +54,7 @@ class YOLOv7(SingleStageDetector):
         backbone,
         bbox_head,
         **kwargs,
-    ):
+    ):  
         super().__init__(
             backbone=backbone,
             bbox_head=bbox_head,
