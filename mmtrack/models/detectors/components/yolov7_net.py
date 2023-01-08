@@ -27,9 +27,9 @@ class YOLOv7Net(nn.Module):
         self.net = self.load_net()
 
     def load_net(self):
-        from pathlib import Path
+        # from pathlib import Path
 
-        path = Path(__file__).parents[1].resolve().joinpath("modules/yolov7").resolve()
+        # path = Path(__file__).parents[1].resolve().joinpath("modules/yolov7").resolve()
 
         net = torch.hub.load("IAI-MTMC/yolov7", "yolov7_custom", cfg=self.cfg_path)
 
