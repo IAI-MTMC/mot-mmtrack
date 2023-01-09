@@ -28,35 +28,35 @@ model = dict(
         )
     ),
     motion=dict(type="KalmanFilter", center_only=False),
-    # reid=dict(
-    #     type="MyReID",
-    #     model_name="resnet50",
-    #     model_path=None,
-    #     device="cuda"
-    # ),
     reid=dict(
-        type="BaseReID",
-        backbone=dict(
-            type="ResNet", depth=50, num_stages=4, out_indices=(3,), style="pytorch"
-        ),
-        neck=dict(type="GlobalAveragePooling", kernel_size=(8, 4), stride=1),
-        head=dict(
-            type="LinearReIDHead",
-            num_fcs=1,
-            in_channels=2048,
-            fc_channels=1024,
-            out_channels=128,
-            num_classes=380,
-            loss=dict(type="CrossEntropyLoss", loss_weight=1.0),
-            loss_pairwise=dict(type="TripletLoss", margin=0.3, loss_weight=1.0),
-            norm_cfg=dict(type="BN1d"),
-            act_cfg=dict(type="ReLU"),
-        ),
-        init_cfg=dict(
-            type="Pretrained",
-            checkpoint="https://download.openmmlab.com/mmtracking/mot/reid/tracktor_reid_r50_iter25245-a452f51f.pth",  # noqa: E251  # noqa: E501
-        ),
+        type="MyReID",
+        model_name="resnet50",
+        model_path=None,
+        device="cuda"
     ),
+    # reid=dict(
+    #     type="BaseReID",
+    #     backbone=dict(
+    #         type="ResNet", depth=50, num_stages=4, out_indices=(3,), style="pytorch"
+    #     ),
+    #     neck=dict(type="GlobalAveragePooling", kernel_size=(8, 4), stride=1),
+    #     head=dict(
+    #         type="LinearReIDHead",
+    #         num_fcs=1,
+    #         in_channels=2048,
+    #         fc_channels=1024,
+    #         out_channels=128,
+    #         num_classes=380,
+    #         loss=dict(type="CrossEntropyLoss", loss_weight=1.0),
+    #         loss_pairwise=dict(type="TripletLoss", margin=0.3, loss_weight=1.0),
+    #         norm_cfg=dict(type="BN1d"),
+    #         act_cfg=dict(type="ReLU"),
+    #     ),
+    #     init_cfg=dict(
+    #         type="Pretrained",
+    #         checkpoint="https://download.openmmlab.com/mmtracking/mot/reid/tracktor_reid_r50_iter25245-a452f51f.pth",  # noqa: E251  # noqa: E501
+    #     ),
+    # ),
     tracker=dict(
         type="SortTracker",
         obj_score_thr=0.5,
@@ -73,12 +73,12 @@ model = dict(
 # img_norm_cfg = dict(
 #     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 img_norm_cfg = dict(
-    mean=[0.0, 0.0, 0.0], std=[1.0, 1.0, 1.0], to_rgb=True)
+    mean=[0.0, 0.0, 0.0], std=[255.0, 255.0, 255.0], to_rgb=True)
 test_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(640, 640),
+        img_scale=(1080, 1080),
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),
