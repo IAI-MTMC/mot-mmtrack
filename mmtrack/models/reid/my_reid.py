@@ -23,4 +23,4 @@ class MyReID(BaseModule):
             feats = self(img)
             return feats
         else:
-            return img.new_zeros(0, self.reid.model.out_channels)
+            return img.new_zeros(0, 32)

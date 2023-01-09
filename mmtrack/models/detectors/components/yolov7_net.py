@@ -1,5 +1,6 @@
 # Source: https://github.com/IAI-MTMC/MOT/tree/main/src/models/det/components/yolov7_net.py
 
+import warnings
 from typing import Optional
 import torch
 from torch import nn
@@ -27,10 +28,6 @@ class YOLOv7Net(nn.Module):
         self.net = self.load_net()
 
     def load_net(self):
-        # from pathlib import Path
-
-        # path = Path(__file__).parents[1].resolve().joinpath("modules/yolov7").resolve()
-
         net = torch.hub.load("IAI-MTMC/yolov7", "yolov7_custom", cfg=self.cfg_path)
 
         assert isinstance(net, nn.Module)
@@ -40,8 +37,20 @@ class YOLOv7Net(nn.Module):
                 ckpt = load_url(self.pretrained_path)
             else:
                 ckpt = torch.load(self.pretrained_path)
-            net.load_state_dict(ckpt["model"].state_dict())
 
+            if "epoch" in ckpt:  # Checkpoint from  WongKinYiu/yolov7
+                print("Loading checkpoint from WongKinYiu/yolov7")
+                state_dict = ckpt["model"].float().state_dict()
+            else:
+                state_dict = ckpt
+
+            try:
+                net.load_state_dict(state_dict, strict=True)
+            except:
+                warnings.warn(
+                    "YOLOv7: Some weights were not loaded from the checkpoint."
+                )
+                net.load_state_dict(state_dict, strict=False)
         return net
 
     def forward(self, x):

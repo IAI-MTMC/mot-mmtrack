@@ -5,7 +5,6 @@ from mmdet.models.builder import build_backbone, build_head
 from mmcv.runner import BaseModule
 
 
-
 # NOTE: This is a trick to make our pretrained model work with mmtrack.
 @HEADS.register_module()
 class YOLOv7Head(BaseModule):
@@ -27,22 +26,28 @@ class YOLOv7Head(BaseModule):
         self.test_cfg = test_cfg
 
     def forward(self, val_outs: torch.Tensor):
-        return val_outs
+        return (val_outs,)
 
     def get_bboxes(
         self,
         val_outs: torch.Tensor,
-        *args,
-        **kwargs,
+        img_metas=None,
+        rescale=None,
     ):
+        val_outs = val_outs[0]
         outs = non_max_suppression(val_outs, self.conf_thresh, self.iou_thres)
 
         assert len(outs) == 1, "Only support batch size 1."
-        outs = outs[0]
+        preds = outs[0]
 
-        bboxes = outs[:, :5]
-        # conf = outs[:, 4]
-        labels = outs[:, 5].long()
+        bboxes = preds[:, :5]
+        labels = preds[:, 5].long()
+
+        if img_metas:
+            *img_size, _ = img_metas[0]["img_shape"]
+            org_img = img_metas[0]["ori_shape"]
+
+            bboxes = scale_coords(img_size, bboxes, org_img).round()
 
         return [[bboxes, labels]]
 
@@ -54,7 +59,7 @@ class YOLOv7(SingleStageDetector):
         backbone,
         bbox_head,
         **kwargs,
-    ):  
+    ):
         super().__init__(
             backbone=backbone,
             bbox_head=bbox_head,
@@ -70,6 +75,7 @@ class YOLOv7(SingleStageDetector):
 import time
 import torchvision
 import numpy as np
+
 
 def box_iou(box1, box2):
     # https://github.com/pytorch/vision/blob/master/torchvision/ops/boxes.py
@@ -92,8 +98,18 @@ def box_iou(box1, box2):
     area2 = box_area(box2.T)
 
     # inter(N,M) = (rb(N,M,2) - lt(N,M,2)).clamp(0).prod(2)
-    inter = (torch.min(box1[:, None, 2:], box2[:, 2:]) - torch.max(box1[:, None, :2], box2[:, :2])).clamp(0).prod(2)
-    return inter / (area1[:, None] + area2 - inter)  # iou = inter / (area1 + area2 - inter)
+    inter = (
+        (
+            torch.min(box1[:, None, 2:], box2[:, 2:])
+            - torch.max(box1[:, None, :2], box2[:, :2])
+        )
+        .clamp(0)
+        .prod(2)
+    )
+    return inter / (
+        area1[:, None] + area2 - inter
+    )  # iou = inter / (area1 + area2 - inter)
+
 
 def xywh2xyxy(x):
     # Convert nx4 boxes from [x, y, w, h] to [x1, y1, x2, y2] where xy1=top-left, xy2=bottom-right
@@ -105,8 +121,15 @@ def xywh2xyxy(x):
     return y
 
 
-def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=None, agnostic=False, multi_label=False,
-                        labels=()):
+def non_max_suppression(
+    prediction,
+    conf_thres=0.25,
+    iou_thres=0.45,
+    classes=None,
+    agnostic=False,
+    multi_label=False,
+    labels=(),
+):
     """Runs Non-Maximum Suppression (NMS) on inference results
 
     Returns:
@@ -147,8 +170,10 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
 
         # Compute conf
         if nc == 1:
-            x[:, 5:] = x[:, 4:5] # for models with one class, cls_loss is 0 and cls_conf is always 0.5,
-                                 # so there is no need to multiplicate.
+            x[:, 5:] = x[
+                :, 4:5
+            ]  # for models with one class, cls_loss is 0 and cls_conf is always 0.5,
+            # so there is no need to multiplicate.
         else:
             x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
 
@@ -184,17 +209,47 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
         i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
         if i.shape[0] > max_det:  # limit detections
             i = i[:max_det]
-        if merge and (1 < n < 3E3):  # Merge NMS (boxes merged using weighted mean)
+        if merge and (1 < n < 3e3):  # Merge NMS (boxes merged using weighted mean)
             # update boxes as boxes(i,4) = weights(i,n) * boxes(n,4)
             iou = box_iou(boxes[i], boxes) > iou_thres  # iou matrix
             weights = iou * scores[None]  # box weights
-            x[i, :4] = torch.mm(weights, x[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
+            x[i, :4] = torch.mm(weights, x[:, :4]).float() / weights.sum(
+                1, keepdim=True
+            )  # merged boxes
             if redundant:
                 i = i[iou.sum(1) > 1]  # require redundancy
 
         output[xi] = x[i]
         if (time.time() - t) > time_limit:
-            print(f'WARNING: NMS time limit {time_limit}s exceeded')
+            print(f"WARNING: NMS time limit {time_limit}s exceeded")
             break  # time limit exceeded
 
     return output
+
+
+def clip_coords(boxes, img_shape):
+    # Clip bounding xyxy bounding boxes to image shape (height, width)
+    boxes[:, 0].clamp_(0, img_shape[1])  # x1
+    boxes[:, 1].clamp_(0, img_shape[0])  # y1
+    boxes[:, 2].clamp_(0, img_shape[1])  # x2
+    boxes[:, 3].clamp_(0, img_shape[0])  # y2
+
+
+def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
+    # Rescale coords (xyxy) from img1_shape to img0_shape
+    if ratio_pad is None:  # calculate from img0_shape
+        gain = min(
+            img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1]
+        )  # gain  = old / new
+        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (
+            img1_shape[0] - img0_shape[0] * gain
+        ) / 2  # wh padding
+    else:
+        gain = ratio_pad[0][0]
+        pad = ratio_pad[1]
+
+    coords[:, [0, 2]] -= pad[0]  # x padding
+    coords[:, [1, 3]] -= pad[1]  # y padding
+    coords[:, :4] /= gain
+    clip_coords(coords, img0_shape)
+    return coords

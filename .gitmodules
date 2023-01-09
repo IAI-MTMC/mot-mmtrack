@@ -1,3 +1,0 @@
-[submodule "/home/hoang/Workspace/mot-mmtrack/mmtrack/models/backbones/components/yolov7"]
-	path = /home/hoang/Workspace/mot-mmtrack/mmtrack/models/backbones/components/yolov7
-	url = https://github.com/IAI-MTMC/yolov7.git
