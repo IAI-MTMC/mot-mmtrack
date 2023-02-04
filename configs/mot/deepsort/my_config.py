@@ -17,8 +17,7 @@ model = dict(
         type="YOLOv7",
         backbone=dict(
             type="YOLOv7Net",
-            cfg_path="configs/others/yolov7/yolov7-tiny.yaml",
-            pretrained_path="https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt"
+            cfg_path="configs/others/yolov7/yolov7-tiny.yaml"
         ),
         bbox_head=dict(
             type="YOLOv7Head",

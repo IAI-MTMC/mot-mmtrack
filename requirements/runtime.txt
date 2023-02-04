@@ -12,3 +12,5 @@ scipy<=1.7.3
 seaborn
 terminaltables
 tqdm
+torchreid
+yolov7detect
