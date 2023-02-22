@@ -10,15 +10,10 @@ strides = [8, 16, 32]
 model = dict(
     type='QDTrackSSTG',
     data_preprocessor=dict(
+        _delete_=True,
         type='TrackDataPreprocessor',
-        pad_size_divisor=32,
-        batch_augments=[
-            dict(
-                type='mmdet.BatchSyncRandomResize',
-                random_size_range=(576, 1024),
-                size_divisor=32,
-                interval=10)
-        ]),
+        pad_size_divisor=32),
+    freeze_detector=True,
     detector=dict(
         _scope_='mmdet',
         bbox_head=dict(num_classes=1),
@@ -26,17 +21,10 @@ model = dict(
         init_cfg=dict(
             type='Pretrained',
             checkpoint=  # noqa: E251
-            'https://download.openmmlab.com/mmdetection/v2.0/yolox/yolox_x_8x8_300e_coco/yolox_x_8x8_300e_coco_20211126_140254-1ef88d67.pth'  # noqa: E501
+            'checkpoints/yolox_x_crowdhuman_mot17-private-half.pth'  # noqa: E501
         )),
     track_head=dict(
         type='QuasiDenseTrackHead',
-        # roi_extractor=dict(
-        #     _scope_='mmdet',
-        #     type='GenericRoIExtractor',
-        #     aggregation='concat',
-        #     roi_layer=dict(type='RoIAlign', output_size=7, sampling_ratio=0),
-        #     out_channels=1792, # 256 + 512 + 1024
-        #     featmap_strides=strides),
         roi_extractor=dict(
             _scope_='mmdet',
             type='SingleRoIExtractor',
@@ -89,36 +77,43 @@ model = dict(
         nms_backdrop_iou_thr=0.3,
         nms_class_iou_thr=0.7,
         with_cats=True,
-        match_metric='bisoftmax'),
-    train_cfg=dict(
-        rpn=dict(
-            assigner=dict(
-                type='MaxIoUAssigner',
-                pos_iou_thr=0.7,
-                neg_iou_thr=0.3,
-                min_pos_iou=0.3,
-                match_low_quality=True,
-                ignore_iof_thr=-1),
-            sampler=dict(
-                type='RandomSampler',
-                num=256,
-                pos_fraction=0.5,
-                neg_pos_ub=-1,
-                add_gt_as_proposals=False),
-            allowed_border=-1,
-            pos_weight=-1,
-            debug=False),
-        rpn_proposal=dict(
-            nms_pre=2000,
-            max_per_img=1000,
-            nms=dict(type='nms', iou_threshold=0.7),
-            min_bbox_size=0)),
-    test_cfg=dict(
-        rpn=dict(
-            nms_pre=1000,
-            max_per_img=1000,
-            nms=dict(type='nms', iou_threshold=0.7),
-            min_bbox_size=0)))
+        match_metric='bisoftmax'))
+
+# data pipeline
+train_pipeline = [
+    dict(
+        type='TransformBroadcaster',
+        share_random_params=True,
+        transforms=[
+            dict(type='LoadImageFromFile'),
+            dict(type='LoadTrackAnnotations', with_instance_id=True),
+            dict(
+                type='mmdet.RandomResize',
+                scale=img_scale,
+                ratio_range=(0.8, 1.2),
+                keep_ratio=True,
+                clip_object_border=False),
+            dict(type='mmdet.PhotoMetricDistortion')
+        ]),
+    dict(
+        type='TransformBroadcaster',
+        share_random_params=True,
+        transforms=[
+            dict(type='mmdet.RandomFlip', prob=0.5),
+        ]),
+    dict(type='PackTrackInputs', ref_prefix='ref', num_key_frames=1)
+]
+
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadTrackAnnotations', with_instance_id=True),
+    dict(type='mmdet.Resize', scale=img_scale, keep_ratio=True),
+    dict(type='PackTrackInputs', pack_single_img=True)
+]
+
+train_dataloader=dict(dataset=dict(pipeline=train_pipeline))
+val_dataloader=dict(dataset=dict(pipeline=test_pipeline))
+test_dataloader = val_dataloader
 
 # optimizer
 lr = 0.001

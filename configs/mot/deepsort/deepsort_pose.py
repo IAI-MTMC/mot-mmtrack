@@ -72,7 +72,7 @@ model = dict(
                 type='Pretrained',
                 checkpoint='https://download.openmmlab.com/mmpose/top_down/resnet/res50_coco_256x192-ec54d7f3_20200709.pth'),
             test_cfg=dict(
-                flip_test=False,
+                flip_test=True,
                 flip_mode='heatmap',
                 shift_heatmap=True,
             ))),

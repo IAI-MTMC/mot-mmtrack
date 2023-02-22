@@ -52,12 +52,13 @@ def parse_gts(ann_path: str):
 
     return outs
 
-def get_image_infos(frames_dir: str):
+def get_image_infos(frames_dir: str, video_name: str):
     """
     Get the frames information from the directory containing the frame images.
 
     Args:
         frames_dir (str): Path to the directory containing the images.
+        video_name (str): Name of the video.
 
     Returns:
         list: List of image information order by frame_id. Each element is a dict with keys `id`, `file_name`, `height`, `width`, `frame_id`.
@@ -78,7 +79,7 @@ def get_image_infos(frames_dir: str):
             height, width = cv2.imread(img_path.path).shape[:2]
         
         info = dict(
-            file_name=img_path.path,
+            file_name=os.path.join(video_name, img_path.name),
             height=height,
             width=width,
             id=frame_id)
@@ -111,10 +112,11 @@ def main():
                     if camera_dir.is_dir():
                         imgs_dir = os.path.join(camera_dir.path, "imgs")
                         gt_path = os.path.join(camera_dir.path, "label.txt")
+                        video_name = os.path.join(scene_dir.name, camera_dir.name, "imgs")
 
                         # Read the annotations
                         anns = parse_gts(gt_path)
-                        imgs = get_image_infos(imgs_dir)
+                        imgs = get_image_infos(imgs_dir, video_name)
 
                         # Match the annotations with the image infos, and add `id` and `frame_id` keys to both of them
                         # Since frames are not extracted with true FPS, we need to match the annotations with the image infos
@@ -148,7 +150,7 @@ def main():
                         subset_anns["videos"].append(
                             dict(
                                 id=camera_id,
-                                name=camera_dir.path,))
+                                name=video_name,))
                         
         # Add the categories to the subset
         subset_anns["categories"].append(dict(id=1, name="person"))
