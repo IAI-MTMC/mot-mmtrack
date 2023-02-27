@@ -10,6 +10,7 @@ pip install -U openmim
 mim install mmcv-full mmdet
 
 pip install -v -e .
+pip install git+https://github.com/JonathonLuiten/TrackEval.git
 ```
 
 # Usage
