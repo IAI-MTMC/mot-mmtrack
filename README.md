@@ -5,6 +5,7 @@ conda create -n mot-mmtrack python=3.10 -y
 conda activate mot-mmtrack
 
 pip install torch torchvision
+# or conda install pytorch torchvision pytorch-cuda=11.7 -c pytorch -c nvidia
 pip install -U openmim
 mim install mmcv-full mmdet
 
