@@ -121,3 +121,11 @@ mmtrack/.mim
 *.pth
 *.py~
 *.sh~
+
+
+# Demo Tools
+demo/demo.sh
+demo/debug_mot.py
+
+# Outputs Dir
+outputs
