@@ -4,6 +4,9 @@ from tqdm import tqdm
 from argparse import ArgumentParser
 import mmengine
 
+_video_id = 0
+_image_id = 0
+_annotation_id = 0
 
 def parse_args():
     parser = ArgumentParser()
@@ -13,9 +16,7 @@ def parse_args():
 
 def parse_gts(ann_path: str):
     """
-    Read the annotations from the ground-truth file and convert them to format.
-        list of dicts with keys: `id`, `category_id`, `instance_id`, `bbox`, `area`
-    Note: The `bbox` is in the format `[xtop, ytop, w, h]`.
+    Read the annotations from the ground-truth file and format them.
 
     Args:
         ann_path (str): Path to the annotation file.
@@ -23,33 +24,38 @@ def parse_gts(ann_path: str):
             `<frame_id>,<track_id>,<bbox_left>,<bbox_top>,<bbox_width>,<bbox_height>,1,-1,-1,-1`
 
     Returns:
-        list: List of annotations.
+        list: List of annotations. Each contains keys:
+            - `id`: The id of annotation.
+            - `category_id`: The id of the category of annotated object.
+            - `instance_id`: The id of the instance of annotated object.
+            - `bbox`: The bounding box of annotated object with format `[x_left, y_top, w, h]`.
+            - `area`: The area of the bounding box.
+            - `true_frame_id`: The true frame id of annotated object.
     """
-
+    global _annotation_id
     outs = []
 
-    with open(ann_path, "r") as f:        
-        while True:
-            ann = f.readline()
-
-            if ann == "":
-                break
-
-            ann = ann.strip().split(",")
-            frame_id, instance_id = map(int, ann[:2])
+    with open(ann_path, "r") as f:
+        for ann in f:        
+            ann = ann.rstrip().split(",")
+            true_frame_id, instance_id = map(int, ann[:2])
             bbox = list(map(float, ann[2:6]))
             category_id = 1
             area = bbox[2] * bbox[3]
             
             ann = dict(
-                id=frame_id,
+                id=_annotation_id,
                 category_id=category_id,
                 instance_id=instance_id,
                 bbox=bbox,
-                area=area)
+                area=area,
+                iscrowd=False,
+                visibility=1.0,
+                mot_conf=1.0,
+                true_frame_id=true_frame_id)
+            _annotation_id += 1 # Increment the annotation id.
 
             outs.append(ann)
-
     return outs
 
 def get_image_infos(frames_dir: str, video_name: str):
@@ -61,28 +67,38 @@ def get_image_infos(frames_dir: str, video_name: str):
         video_name (str): Name of the video.
 
     Returns:
-        list: List of image information order by frame_id. Each element is a dict with keys `id`, `file_name`, `height`, `width`, `frame_id`.
+        list: List of image information order by frame_id. Each is a dict with keys:
+            - `id`: The id of the image.
+            - `file_name`: The name of the image file.
+            - `height`: The height of the image.
+            - `width`: The width of the image.
+            - `frame_id`: The frame id of the image.
+            - `true_frame_id`: The true frame id of the image.
     """
+    global _image_id
 
     outs = []
-
     height, width = None, None
     
     prev_frame_id = -1
-    for img_path in os.scandir(frames_dir):
-        frame_id = int(img_path.name.split(".")[0])
+    for id, img_path in enumerate(os.scandir(frames_dir)):
+        file_name, ext = os.path.splitext(img_path.name)
+        true_frame_id = int(file_name)
 
-        assert frame_id > prev_frame_id, f"Frame ids are not in order: {frame_id} <= {prev_frame_id}"
-        prev_frame_id = frame_id
+        assert true_frame_id > prev_frame_id, f"Frame ids are not in order: {true_frame_id} <= {prev_frame_id}"
+        prev_frame_id = true_frame_id
 
         if height is None:
             height, width = cv2.imread(img_path.path).shape[:2]
         
         info = dict(
-            file_name=os.path.join(video_name, img_path.name),
+            id=_image_id,
+            file_name=os.path.join(video_name, "imgs", img_path.name),
             height=height,
             width=width,
-            id=frame_id)
+            frame_id=id,
+            true_frame_id=true_frame_id)
+        _image_id += 1 # Increment the image id
 
         outs.append(info)
     
@@ -90,6 +106,7 @@ def get_image_infos(frames_dir: str, video_name: str):
 
 
 def main():
+    global _video_id
     args = parse_args()
 
     for subset in ("train", "validation"):
@@ -108,39 +125,40 @@ def main():
         print(f'Extracting images from {subset} set')
         for scene_dir in tqdm(os.scandir(subset_dir)):
             if scene_dir.is_dir():
-                for camera_id, camera_dir in enumerate(os.scandir(scene_dir)):
+                for camera_dir in os.scandir(scene_dir):
                     if camera_dir.is_dir():
                         imgs_dir = os.path.join(camera_dir.path, "imgs")
                         gt_path = os.path.join(camera_dir.path, "label.txt")
-                        video_name = os.path.join(scene_dir.name, camera_dir.name, "imgs")
+                        video_name = os.path.join(scene_dir.name, camera_dir.name)
 
                         # Read the annotations
                         anns = parse_gts(gt_path)
                         imgs = get_image_infos(imgs_dir, video_name)
 
-                        # Match the annotations with the image infos, and add `id` and `frame_id` keys to both of them
-                        # Since frames are not extracted with true FPS, we need to match the annotations with the image infos
+                        # Match the annotations with the image infos
+                        # Since frames are not extracted with the true FPS, we need to match the annotations with the image infos
                         ann_id = 0
                         new_anns = []
-                        for frame_id, imgs in enumerate(imgs):
-                            img["frame_id"] = frame_id
-
+                        for img in imgs:
                             while ann_id < len(anns):
                                 ann = anns[ann_id]
-                                if ann["id"] == img["id"]:
-                                    ann["frame_id"] = frame_id
+                                if ann["true_frame_id"] < img["true_frame_id"]:
+                                    ann_id += 1
+                                elif ann["true_frame_id"] == img["true_frame_id"]:
+                                    ann["image_id"] = img["id"]
                                     new_anns.append(ann)
-                                
-                                ann_id += 1
+                                    ann_id += 1
+                                elif ann["true_frame_id"] > img["true_frame_id"]:
+                                    break
                         anns = new_anns
 
                         # Add video_id keys to the annotations
                         for ann in anns:
-                            ann["video_id"] = camera_id
+                            ann["video_id"] = _video_id
                         
                         # Add video_id keys to the image infos
                         for img in imgs:
-                            img["video_id"] = camera_id
+                            img["video_id"] = _video_id
 
                         # Add the annotations and image infos to the subset
                         subset_anns["annotations"].extend(anns)
@@ -149,11 +167,16 @@ def main():
                         # Add the videos to the subset
                         subset_anns["videos"].append(
                             dict(
-                                id=camera_id,
+                                id=_video_id,
                                 name=video_name,))
+
+                        _video_id += 1 # Increment the video id
                         
         # Add the categories to the subset
         subset_anns["categories"].append(dict(id=1, name="person"))
 
         print("Saving annotations...")
-        mmengine.dump(subset_anns, os.path.join(save_dir, f"{subset}.json"))
+        mmengine.dump(subset_anns, os.path.join(save_dir, f"{subset}_cocoformat.json"))
+
+if __name__ == '__main__':
+    main()
