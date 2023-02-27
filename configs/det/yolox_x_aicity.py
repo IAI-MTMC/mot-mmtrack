@@ -10,7 +10,7 @@ model = dict(
         batch_augments=[
             dict(
                 type="BatchSyncRandomResize",
-                random_size_range=(320, 640),
+                random_size_range=(480, 800),
                 size_divisor=32,
                 interval=10,
             )
@@ -157,5 +157,10 @@ custom_hooks = [
         update_buffers=True,
         priority=49,
     ),
+    dict(
+        type="DetWandbLoggerHook", 
+        init_kwargs={'entity': 'mmdetection', 'project': 'yolox'}, 
+        interval=50, 
+        log_checkpoint=True)
 ]
 default_hooks = dict(checkpoint=dict(interval=interval))
