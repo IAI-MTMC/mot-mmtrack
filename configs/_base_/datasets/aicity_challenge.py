@@ -1,5 +1,5 @@
 # dataset settings
-dataset_type = "BaseVideoDataset"
+dataset_type = "MOTChallengeDataset"
 data_root = "../datasets/AIC23_Track1_MTMC_Tracking"
 
 # data pipeline
@@ -73,7 +73,8 @@ val_dataloader = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file="annotations/validation_cocoformat.json",
-        data_prefix=dict(img_path="train"),
+        data_prefix=dict(img_path="validation/"),
+        metainfo=dict(classes=("person",)),
         ref_img_sampler=None,
         load_as_video=True,
         test_mode=True,
@@ -83,5 +84,5 @@ val_dataloader = dict(
 test_dataloader = val_dataloader
 
 # evaluator
-val_evaluator = dict(type="MOTChallengeMetrics", metric=["HOTA", "CLEAR", "Identity"])
+val_evaluator = dict(type="MOTChallengeMetrics", benchmark='MOT15', metric=["HOTA", "CLEAR", "Identity"])
 test_evaluator = val_evaluator

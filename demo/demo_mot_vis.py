@@ -10,7 +10,6 @@ import mmengine
 from mmtrack.apis import inference_mot, init_model
 from mmtrack.registry import VISUALIZERS
 from mmtrack.utils import register_all_modules
-from mmpose.utils import register_all_modules as register_all_modules_pose
 
 
 def parse_args():
@@ -72,7 +71,6 @@ def main(args):
         fps = int(fps)
 
     register_all_modules(init_default_scope=True)
-    register_all_modules_pose(init_default_scope=False)
 
     # build the model from a config file and a checkpoint file
     model = init_model(args.config, args.checkpoint, device=args.device)

@@ -1,7 +1,7 @@
 _base_ = ["../_base_/default_runtime.py", "../_base_/datasets/aicity_challenge_det.py"]
 
 img_scale = (640, 640)
-batch_size = 2
+batch_size = 4
 
 model = dict(
     data_preprocessor=dict(
@@ -18,7 +18,7 @@ model = dict(
     ),
     _scope_="mmdet",
     type="YOLOX",
-    backbone=dict(type="CSPDarknet", deepen_factor=1.33, widen_factor=1.25),
+    backbone=dict(type="CSPDarknet", deepen_factor=1.33, widen_factor=1.25, frozen_stages=3),
     neck=dict(
         type="YOLOXPAFPN",
         in_channels=[320, 640, 1280],
@@ -30,9 +30,7 @@ model = dict(
     test_cfg=dict(score_thr=0.01, nms=dict(type="nms", iou_threshold=0.7)),
     init_cfg=dict(
         type="Pretrained",
-        checkpoint=  # noqa: E251
-        # 'https://download.openmmlab.com/mmdetection/v2.0/yolox/yolox_x_8x8_300e_coco/yolox_x_8x8_300e_coco_20211126_140254-1ef88d67.pth'  # noqa: E501
-        "checkpoints/yolox_x_crowdhuman_mot17-private-half.pth",
+        checkpoint="checkpoints/yolox_x_crowdhuman_mot17-private-half.pth",
     ),
 )
 
@@ -97,7 +95,7 @@ val_dataloader = dict(dataset=dict(pipeline=test_pipeline))
 test_dataloader = val_dataloader
 
 # optimizer
-lr = 0.001 * batch_size
+lr = 0.0001 * batch_size
 optim_wrapper = dict(
     type="OptimWrapper",
     optimizer=dict(type="SGD", lr=lr, momentum=0.9, weight_decay=5e-4, nesterov=True),
@@ -106,9 +104,9 @@ optim_wrapper = dict(
 
 # some hyper parameters
 # training settings
-total_epochs = 15
+total_epochs = 20
 num_last_epochs = 5
-resume_from = None
+resume = None
 interval = 5
 
 train_cfg = dict(
@@ -157,10 +155,22 @@ custom_hooks = [
         update_buffers=True,
         priority=49,
     ),
-    dict(
-        type="DetWandbLoggerHook", 
-        init_kwargs={'entity': 'mmdetection', 'project': 'yolox'}, 
-        interval=50, 
-        log_checkpoint=True)
 ]
-default_hooks = dict(checkpoint=dict(interval=interval))
+default_hooks = dict(
+    checkpoint=dict(interval=interval),
+    visualization=dict(type="mmdet.DetVisualizationHook", draw=True),
+)
+
+vis_backends = [
+    dict(type="LocalVisBackend"),
+    dict(
+        type="WandbVisBackend",
+        init_kwargs=dict(
+            entity="iai-mtmc",
+            project="yolox",
+        ),
+    ),
+]
+visualizer = dict(
+    type="DetLocalVisualizer", vis_backends=vis_backends, name="visualizer"
+)

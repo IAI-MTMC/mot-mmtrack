@@ -122,6 +122,11 @@ def main():
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
+        # Reset id counter for each annotation file
+        _video_id = 0
+        _image_id = 0
+        _annotation_id = 0
+
         print(f'Extracting images from {subset} set')
         for scene_dir in tqdm(os.scandir(subset_dir)):
             if scene_dir.is_dir():
