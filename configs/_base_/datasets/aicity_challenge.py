@@ -24,7 +24,10 @@ train_pipeline = [
         type="TransformBroadcaster",
         share_random_params=False,
         transforms=[
-            dict(type="mmdet.RandomCrop", crop_size=(640, 640), bbox_clip_border=False)
+            dict(
+                type="mmdet.RandomCrop",
+                crop_size=(640, 640),
+                bbox_clip_border=False)
         ],
     ),
     dict(
@@ -56,10 +59,12 @@ train_dataloader = dict(
         data_root=data_root,
         ann_file="annotations/train_cocoformat.json",
         data_prefix=dict(img_path="train/"),
-        metainfo=dict(classes=("person",)),
+        metainfo=dict(classes=("person", )),
         ref_img_sampler=dict(
-            num_ref_imgs=1, frame_range=10, filter_key_img=True, method="uniform"
-        ),
+            num_ref_imgs=1,
+            frame_range=10,
+            filter_key_img=True,
+            method="uniform"),
         pipeline=train_pipeline,
     ),
 )
@@ -74,7 +79,7 @@ val_dataloader = dict(
         data_root=data_root,
         ann_file="annotations/validation_cocoformat.json",
         data_prefix=dict(img_path="validation/"),
-        metainfo=dict(classes=("person",)),
+        metainfo=dict(classes=("person", )),
         ref_img_sampler=None,
         load_as_video=True,
         test_mode=True,
@@ -84,5 +89,8 @@ val_dataloader = dict(
 test_dataloader = val_dataloader
 
 # evaluator
-val_evaluator = dict(type="MOTChallengeMetrics", benchmark='MOT15', metric=["HOTA", "CLEAR", "Identity"])
+val_evaluator = dict(
+    type="MOTChallengeMetrics",
+    benchmark="MOT15",
+    metric=["HOTA", "CLEAR", "Identity"])
 test_evaluator = val_evaluator

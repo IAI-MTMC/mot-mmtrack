@@ -1,10 +1,10 @@
 _base_ = [
     '../../_base_/models/yolox_x_8x8.py',
     '../../_base_/default_runtime.py',
-    '../../_base_/datasets/mot_challenge.py'
+    '../../_base_/datasets/aicity_challenge.py'
 ]
 
-img_scale = (800, 1040)
+img_scale = (640, 640)
 strides = [8, 16, 32]
 
 model = dict(
@@ -17,6 +17,7 @@ model = dict(
     detector=dict(
         _scope_='mmdet',
         bbox_head=dict(num_classes=1),
+        train_cfg=dict(score_thr=0, nms=dict(type='nms', iou_threshold=0.7, max_num=1000)),
         test_cfg=dict(score_thr=0.01, nms=dict(type='nms', iou_threshold=0.7)),
         init_cfg=dict(
             type='Pretrained',
@@ -79,42 +80,6 @@ model = dict(
         with_cats=True,
         match_metric='bisoftmax'))
 
-# data pipeline
-train_pipeline = [
-    dict(
-        type='TransformBroadcaster',
-        share_random_params=True,
-        transforms=[
-            dict(type='LoadImageFromFile'),
-            dict(type='LoadTrackAnnotations', with_instance_id=True),
-            dict(
-                type='mmdet.RandomResize',
-                scale=img_scale,
-                ratio_range=(0.8, 1.2),
-                keep_ratio=True,
-                clip_object_border=False),
-            dict(type='mmdet.PhotoMetricDistortion')
-        ]),
-    dict(
-        type='TransformBroadcaster',
-        share_random_params=True,
-        transforms=[
-            dict(type='mmdet.RandomFlip', prob=0.5),
-        ]),
-    dict(type='PackTrackInputs', ref_prefix='ref', num_key_frames=1)
-]
-
-test_pipeline = [
-    dict(type='LoadImageFromFile'),
-    dict(type='LoadTrackAnnotations', with_instance_id=True),
-    dict(type='mmdet.Resize', scale=img_scale, keep_ratio=True),
-    dict(type='PackTrackInputs', pack_single_img=True)
-]
-
-train_dataloader=dict(dataset=dict(pipeline=train_pipeline))
-val_dataloader=dict(dataset=dict(pipeline=test_pipeline))
-test_dataloader = val_dataloader
-
 # optimizer
 lr = 0.001
 optim_wrapper = dict(
@@ -132,31 +97,11 @@ interval = 5
 # learning policy
 param_scheduler = [
     dict(
-        # use quadratic formula to warm up 1 epochs
-        # and lr is updated by iteration
-        # TODO: fix default scope in get function
-        type='mmdet.QuadraticWarmupLR',
-        by_epoch=True,
+        type='mmdet.MultiStepLR',
         begin=0,
-        end=1,
-        convert_to_iter_based=True),
-    dict(
-        # use cosine lr from 1 to 70 epoch
-        type='mmdet.CosineAnnealingLR',
-        eta_min=lr * 0.05,
-        begin=1,
-        T_max=total_epochs - num_last_epochs,
-        end=total_epochs - num_last_epochs,
+        end=4,
         by_epoch=True,
-        convert_to_iter_based=True),
-    dict(
-        # use fixed lr during last 10 epochs
-        type='mmdet.ConstantLR',
-        by_epoch=True,
-        factor=1,
-        begin=total_epochs - num_last_epochs,
-        end=total_epochs,
-    )
+        milestones=[3])
 ]
 
 # runtime settings
@@ -164,13 +109,4 @@ train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=total_epochs, val_interv
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
-custom_hooks = [
-    dict(type='mmdet.SyncNormHook', priority=48),
-    dict(
-        type='mmdet.EMAHook',
-        ema_type='mmdet.ExpMomentumEMA',
-        momentum=0.0001,
-        update_buffers=True,
-        priority=49)
-]
-default_hooks = dict(checkpoint=dict(interval=1))
+default_hooks = dict(checkpoint=dict(interval=interval))
