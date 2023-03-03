@@ -9,7 +9,6 @@ from mmtrack.registry import MODELS
 from mmtrack.structures import TrackDataSample
 from mmtrack.utils import OptConfigType, OptMultiConfig, SampleList
 from .base import BaseMultiObjectTracker
-from mmdet.models.detectors import SingleStageDetector
 
 @MODELS.register_module()
 class QDTrackSSTG(BaseMultiObjectTracker):
@@ -93,7 +92,8 @@ class QDTrackSSTG(BaseMultiObjectTracker):
 
         losses = dict()
 
-        detect_losses, proposal_results = self.detector.bbox_head.loss_and_predict(x, data_samples, **kwargs)
+        detect_losses, proposal_results = self.detector.bbox_head.loss_and_predict(
+            x, data_samples, self.detector.train_cfg, **kwargs)
 
         losses.update(detect_losses)
 
@@ -106,8 +106,9 @@ class QDTrackSSTG(BaseMultiObjectTracker):
                     img_shape=data_sample.metainfo['ref_img_shape'],
                     scale_factor=data_sample.metainfo['ref_scale_factor']))
             ref_data_samples.append(ref_rpn_data_sample)
-        ref_proposal_results = self.detector.bbox_head.predict(
-            ref_x, ref_data_samples, **kwargs)
+        _, ref_proposal_results = self.detector.bbox_head.loss_and_predict(
+            ref_x, ref_data_samples, self.detector.train_cfg, **kwargs)
+
         losses_track = self.track_head.loss(x, ref_x, proposal_results,
                                             ref_proposal_results, data_samples,
                                             **kwargs)
