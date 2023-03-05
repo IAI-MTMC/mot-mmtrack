@@ -115,3 +115,49 @@ class ByteTrack(BaseMultiObjectTracker):
         track_data_sample.pred_track_instances = pred_track_instances
 
         return [track_data_sample]
+    
+    def batch_predict(self, inputs: Dict[str, Tensor], data_samples: SampleList,
+                **kwargs) -> SampleList:
+        """Predict results from a batch of inputs and data samples with post-
+        processing.
+
+        Args:
+            inputs (Dict[str, Tensor]): of shape (N, T, C, H, W) encoding
+                input images. Typically these should be mean centered and std
+                scaled. The N denotes batch size.The T denotes the number of
+                key/reference frames.
+                - img (Tensor) : The key images.
+                - ref_img (Tensor): The reference images.
+            data_samples (list[:obj:`TrackDataSample`]): The batch
+                data samples. It usually includes information such
+                as `gt_instance`.
+
+        Returns:
+            SampleList: Tracking results of the input images.
+            Each TrackDataSample usually contains ``pred_det_instances``
+            or ``pred_track_instances``.
+        """
+        imgs = inputs['img']
+        assert imgs.dim() == 5, 'The img must be 5D Tensor (N, T, C, H, W).'
+
+        track_data_samples = data_samples
+
+        det_results = self.detector.predict(imgs, data_samples)
+        
+        for i in range(len(det_results)):
+            track_data_sample = track_data_samples[i]
+            det_result = det_results[i]
+            img = imgs[i]
+
+            track_data_sample.pred_det_instances = \
+                det_result.pred_instances.clone()
+
+            pred_track_instances = self.tracker.track(
+                model=self,
+                img=img,
+                feats=None,
+                data_sample=track_data_sample,
+                **kwargs)
+            track_data_sample.pred_track_instances = pred_track_instances
+
+        return track_data_samples
