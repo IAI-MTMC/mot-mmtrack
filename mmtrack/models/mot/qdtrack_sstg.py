@@ -100,14 +100,20 @@ class QDTrackSSTG(BaseMultiObjectTracker):
         # adjust the key of ref_img in data_samples
         ref_data_samples = []
         for data_sample in data_samples:
-            ref_rpn_data_sample = TrackDataSample()
-            ref_rpn_data_sample.set_metainfo(
+            ref_data_sample = TrackDataSample()
+            ref_data_sample.set_metainfo(
                 metainfo=dict(
                     img_shape=data_sample.metainfo['ref_img_shape'],
                     scale_factor=data_sample.metainfo['ref_scale_factor']))
-            ref_data_samples.append(ref_rpn_data_sample)
-        _, ref_proposal_results = self.detector.bbox_head.loss_and_predict(
-            ref_x, ref_data_samples, self.detector.train_cfg, **kwargs)
+            ref_data_samples.append(ref_data_sample)
+        
+        # Since mmdet does not support predict with custom test_cfg, 
+        # we need to change the test_cfg of bbox_head temporarily.
+        backup_cfg = self.detector.bbox_head.test_cfg
+        self.detector.bbox_head.test_cfg = self.detector.train_cfg
+        ref_proposal_results = self.detector.bbox_head.predict(
+            ref_x, ref_data_samples, **kwargs)
+        self.detector.bbox_head.test_cfg = backup_cfg
 
         losses_track = self.track_head.loss(x, ref_x, proposal_results,
                                             ref_proposal_results, data_samples,

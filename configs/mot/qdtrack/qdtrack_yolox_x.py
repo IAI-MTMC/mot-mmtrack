@@ -22,7 +22,7 @@ model = dict(
         init_cfg=dict(
             type='Pretrained',
             checkpoint=  # noqa: E251
-            'checkpoints/yolox_x_crowdhuman_mot17-private-half.pth'  # noqa: E501
+            'work_dirs/yolox_x_aicity/epoch_10.pth'  # noqa: E501
         )),
     track_head=dict(
         type='QuasiDenseTrackHead',
@@ -71,14 +71,59 @@ model = dict(
         init_score_thr=0.9,
         obj_score_thr=0.5,
         match_score_thr=0.5,
-        memo_tracklet_frames=30,
+        memo_tracklet_frames=120,
         memo_backdrop_frames=1,
         memo_momentum=0.8,
         nms_conf_thr=0.5,
         nms_backdrop_iou_thr=0.3,
         nms_class_iou_thr=0.7,
-        with_cats=True,
-        match_metric='bisoftmax'))
+        with_cats=False,
+        match_metric='bisoftmax'),
+    init_cfg=dict(
+        type='Pretrained',
+        checkpoint='work_dirs/qdtrack_yolox_x/epoch_5.pth'))
+
+# data pipeline
+train_pipeline = [
+    dict(
+        type='TransformBroadcaster',
+        share_random_params=True,
+        transforms=[
+            dict(type='LoadImageFromFile'),
+            dict(type='LoadTrackAnnotations', with_instance_id=True),
+            dict(
+                type='mmdet.Resize',
+                scale=img_scale,
+                keep_ratio=True),
+            dict(type='mmdet.PhotoMetricDistortion')
+        ]),
+    dict(
+        type='TransformBroadcaster',
+        share_random_params=False,
+        transforms=[
+            dict(
+                type='mmdet.RandomCrop',
+                crop_size=img_scale,
+                bbox_clip_border=False)
+        ]),
+    dict(
+        type='TransformBroadcaster',
+        share_random_params=True,
+        transforms=[
+            dict(type='mmdet.RandomFlip', prob=0.5),
+        ]),
+    dict(type='PackTrackInputs', ref_prefix='ref')
+]
+
+# dataset settings
+train_dataloader = dict(
+    dataset=dict(
+        ann_file="annotations/train_cocoformat_subset_0.1_consec.json",
+        pipeline=train_pipeline))
+
+val_dataloader = dict(
+    dataset=dict(ann_file="annotations/validation_cocoformat_subset_0.2_consec.json"))
+test_dataloader = val_dataloader
 
 # optimizer
 lr = 0.001
@@ -89,24 +134,36 @@ optim_wrapper = dict(
 
 # some hyper parameters
 # training settings
-total_epochs = 80
-num_last_epochs = 10
+total_epochs = 5
 resume_from = None
-interval = 5
+interval = 1
 
 # learning policy
 param_scheduler = [
     dict(
         type='mmdet.MultiStepLR',
         begin=0,
-        end=4,
+        end=total_epochs,
         by_epoch=True,
         milestones=[3])
 ]
 
 # runtime settings
-train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=total_epochs, val_interval=1)
+train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=total_epochs, val_interval=interval)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
-default_hooks = dict(checkpoint=dict(interval=interval))
+default_hooks = dict(checkpoint=dict(interval=1))
+
+# vis_backends = [
+#     dict(
+#         type="WandbVisBackend",
+#         init_kwargs=dict(
+#             entity="iai-mtmc",
+#             project="qdtrack",
+#         ),
+#     ),
+# ]
+# visualizer = dict(
+#     type="TrackLocalVisualizer", vis_backends=vis_backends, name="visualizer"
+# )
