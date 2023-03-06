@@ -59,21 +59,25 @@ def batch_test(
     results: List[TrackDataSample] = []
 
     frame_id = 0
-    while frame_id < len(video):
-        data_samples = []
-        for _ in range(batch_size):
-            if frame_id >= len(video):
-                break
+    with tqdm(len(video)) as pbar:
+        while frame_id < len(video):
+            data_samples = []
+            for _ in range(batch_size):
+                if frame_id >= len(video):
+                    break
 
-            frame = video[frame_id]
-            data = dict(img=frame, frame_id=frame_id, ori_shape=frame.shape[:2])
-            data = pipeline(data)
-            data_samples.append(data)
-            frame_id += 1
+                frame = video[frame_id]
+                data = dict(img=frame, frame_id=frame_id, ori_shape=frame.shape[:2])
+                data = pipeline(data)
+                data_samples.append(data)
+                frame_id += 1
 
-        data_samples = default_collate(data_samples)
-        result = model.test_step(data_samples)
-        results.extend(result)
+            data_samples = default_collate(data_samples)
+            data_samples = model.data_preprocessor(data_samples, False)
+            result = model.batch_predict(**data_samples)
+            results.extend(result)
+
+            pbar.update(len(result))
     
     return results
 

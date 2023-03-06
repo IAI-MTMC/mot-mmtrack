@@ -87,7 +87,7 @@ def main():
         if ann["image_id"] == img["id"]:
             anns.append(ann)
             ann_idx += 1
-        elif ann["image_idx"] < img["id"]:
+        elif ann["image_id"] < img["id"]:
             ann_idx += 1
         else:
             img_idx += 1
