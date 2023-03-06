@@ -141,7 +141,8 @@ class ByteTrack(BaseMultiObjectTracker):
         assert imgs.dim() == 5, 'The img must be 5D Tensor (N, T, C, H, W).'
 
         track_data_samples = data_samples
-
+        assert imgs.size(1) == 1, 'ByteTrack can only have 1 key frame.'
+        imgs = imgs.squeeze_(1)
         det_results = self.detector.predict(imgs, data_samples)
         
         for i in range(len(det_results)):
