@@ -118,9 +118,6 @@ def main(args):
         shutil.rmtree(args.output_dir)
     os.makedirs(args.output_dir)
 
-    # remove the "LoadImageFromFile" and "LoadTrackAnnotations" in pipeline
-    test_pipeline = Compose(cfg.test_dataloader.dataset.pipeline[2:])
-
     model = init_model(cfg, args.checkpoint, device=args.device)
     # We save the model as a state_dict, 
     # so we can load it back to the model when test new videos
@@ -132,7 +129,7 @@ def main(args):
 
             print(f"Testing {vid_name.name} ...")
             # results = test_once(model, osp.join(args.input_dir, vid_name.name), test_pipeline)
-            results = batch_test(model, osp.join(args.input_dir, vid_name.name), test_pipeline, batch_size=args.batch_size)
+            results = batch_test(model, osp.join(args.input_dir, vid_name.name), batch_size=args.batch_size)
 
             print(f"Saving results to {osp.join(args.output_dir, vid_name.name)} ...")
             save_pred(results, osp.join(args.output_dir, osp.splitext(vid_name.name)[0] + ".txt"))

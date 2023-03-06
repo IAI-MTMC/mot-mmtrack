@@ -163,7 +163,6 @@ class QDTrackSSTG(BaseMultiObjectTracker):
             self.tracker.reset()
 
         x = self.detector.extract_feat(img)
-
         det_results = self.detector.bbox_head.predict(x, data_samples, rescale=rescale)
 
         track_data_sample = data_samples[0]
@@ -218,7 +217,7 @@ class QDTrackSSTG(BaseMultiObjectTracker):
 
         x = self.detector.extract_feat(imgs)
         det_results = self.detector.bbox_head.predict(x, data_samples, rescale=rescale)
-
+        # import pdb; pdb.set_trace()
         for i in range(len(data_samples)):
             metainfo = data_samples[i].metainfo
             frame_id = metainfo.get('frame_id', -1)
@@ -228,11 +227,12 @@ class QDTrackSSTG(BaseMultiObjectTracker):
             track_data_sample = track_data_samples[i]
             track_data_sample.pred_det_instances = \
                 det_results[i].clone()
-
+            
+            img_feats = tuple(feat[i].unsqueeze(0) for feat in x)
             pred_track_instances = self.tracker.track(
                 model=self,
-                img=imgs[i],
-                feats=x[i],
+                img=imgs[i].unsqueeze(0),
+                feats=img_feats,
                 data_sample=track_data_sample,
                 rescale=rescale,
                 **kwargs)
