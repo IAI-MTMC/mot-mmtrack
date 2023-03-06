@@ -59,7 +59,7 @@ def batch_test(
     results: List[TrackDataSample] = []
 
     frame_id = 0
-    with tqdm(len(video)) as pbar:
+    with tqdm(total=len(video)) as pbar:
         while frame_id < len(video):
             data_samples = []
             for _ in range(batch_size):

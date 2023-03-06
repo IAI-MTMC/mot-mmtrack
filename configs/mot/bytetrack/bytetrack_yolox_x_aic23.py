@@ -11,10 +11,10 @@ model = dict(
     detector=dict(
         _scope_='mmdet',
         bbox_head=dict(num_classes=1),
-        test_cfg=dict(score_thr=0.01, nms=dict(type='nms', iou_threshold=0.7)),
+        test_cfg=dict(score_thr=0.5, nms=dict(type='nms', iou_threshold=0.7)),
         init_cfg=dict(
             type='Pretrained',
-            checkpoint='/home/hoang/Workspace/mot-mmtrack/checkpoints/epoch_10.pth'  # noqa: E501
+            checkpoint='checkpoints/epoch_10.pth'  # noqa: E501
         )),
     motion=dict(type='KalmanFilter'),
     tracker=dict(
@@ -23,7 +23,7 @@ model = dict(
         init_track_thr=0.7,
         weight_iou_with_det_scores=True,
         match_iou_thrs=dict(high=0.1, low=0.5, tentative=0.3),
-        num_frames_retain=180))
+        num_frames_retain=30))
 
 test_pipeline = [
     dict(type='LoadImageFromFile'),
