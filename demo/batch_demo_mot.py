@@ -1,4 +1,3 @@
-# Copyright (c) OpenMMLab. All rights reserved.
 import os
 import os.path as osp
 import tempfile
@@ -22,23 +21,14 @@ def parse_args():
         '--output', help='output video file (mp4 format) or folder')
     parser.add_argument('--checkpoint', help='checkpoint file')
     parser.add_argument(
-        '--score-thr',
-        type=float,
-        default=0.0,
-        help='The threshold of score to filter bboxes.')
-    parser.add_argument(
         '--device', default='cuda:0', help='device used for inference')
-    parser.add_argument(
-        '--show',
-        action='store_true',
-        help='whether show the results on the fly')
     parser.add_argument('--fps', help='FPS of the output video')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     args = parser.parse_args()
     return args
 
 def main(args):
-    assert args.output or args.show
+    assert args.output
     # load images
     if osp.isdir(args.input):
         imgs = sorted(
@@ -65,7 +55,7 @@ def main(args):
             os.makedirs(out_path, exist_ok=True)
 
     fps = args.fps
-    if args.show or OUT_VIDEO:
+    if OUT_VIDEO:
         if fps is None and IN_VIDEO:
             fps = imgs.fps
         if not fps:
@@ -79,18 +69,18 @@ def main(args):
 
     prog_bar = mmengine.ProgressBar(len(imgs))
     # test and show/save the images
-    frame_id = 0
-    while frame_id < len(imgs):
+    frame_id_cnt = 0
+    while frame_id_cnt < len(imgs):
         batched_imgs = []
         batch_frame_ids = []
 
         for _ in range(args.batch_size):
-            if frame_id >= len(imgs):
+            if frame_id_cnt >= len(imgs):
                 break
 
-            batched_imgs.append(imgs[frame_id])
-            batch_frame_ids.append(frame_id)
-            frame_id += 1
+            batched_imgs.append(imgs[frame_id_cnt])
+            batch_frame_ids.append(frame_id_cnt)
+            frame_id_cnt += 1
         
         results = batch_inference_mot(model, batched_imgs, batch_frame_ids)
 
@@ -105,7 +95,7 @@ def main(args):
             else:
                 out_file = None
             
-            out_img = draw_tracked_instances(imgs[frame_id].astype('uint8'), result)
+            out_img = draw_tracked_instances(imgs[frame_id], result)
             mmcv.imwrite(out_img, out_file)
         
         prog_bar.update(len(results))

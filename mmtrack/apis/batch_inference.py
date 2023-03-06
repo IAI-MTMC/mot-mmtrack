@@ -6,11 +6,11 @@ from mmcv.ops import RoIPool
 from mmengine.dataset import Compose, default_collate
 from torch import nn
 
-from mmtrack.utils import SampleList
+from mmtrack.structures import TrackDataSample
 
 
 def batch_inference_mot(model: nn.Module, imgs: List[np.ndarray],
-                  frame_ids: List[int]) -> List[SampleList]:
+                  frame_ids: List[int]) -> List[TrackDataSample]:
     """Inference image(s) with the mot model.
 
     Args:
