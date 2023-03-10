@@ -139,9 +139,9 @@ class SORTTracker(BaseTracker):
         if self.with_reid:
             if self.reid.get('img_norm_cfg', False):
                 img_norm_cfg = dict(
-                    mean=data_preprocessor['mean'],
-                    std=data_preprocessor['std'],
-                    to_bgr=data_preprocessor['rgb_to_bgr'])
+                    mean=data_preprocessor.get('mean', [0.0, 0.0, 0.0]),
+                    std=data_preprocessor.get('std', [1.0, 1.0, 1.0]),
+                    to_bgr=data_preprocessor.get('rgb_to_bgr', False))
                 reid_img = imrenormalize(img, img_norm_cfg,
                                          self.reid['img_norm_cfg'])
             else:

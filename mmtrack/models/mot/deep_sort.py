@@ -142,7 +142,7 @@ class DeepSORT(BaseMultiObjectTracker):
         """
         imgs = inputs['img']
         assert imgs.dim() == 5, 'The img must be 5D Tensor (N, T, C, H, W).'
-        assert imgs.size() == 1, \
+        assert imgs.size(1) == 1, \
             'SORT/DeepSORT inference only support ' \
             '1 key frame per batch now.'
         imgs = imgs.squeeze_(1)
@@ -157,7 +157,7 @@ class DeepSORT(BaseMultiObjectTracker):
 
             pred_track_instances = self.tracker.track(
                 model=self,
-                img=imgs,
+                img=imgs[i].unsqueeze(0),
                 feats=None,
                 data_sample=track_data_samples[i],
                 data_preprocessor=self.preprocess_cfg,
