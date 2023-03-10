@@ -23,7 +23,7 @@ model = dict(
         type='MyReID',
         model_name='osnet_x1_0',
         model_path=
-        '../reid/logs/osnet_x1_0_from_scratch_full_data/model.pth.tar-5',
+        'checkpoints/reid_osnet_aic.pth.tar-5',
         device='cuda'),
     tracker=dict(
         type='SORTTracker',
