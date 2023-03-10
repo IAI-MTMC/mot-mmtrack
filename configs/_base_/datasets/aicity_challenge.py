@@ -59,7 +59,7 @@ train_dataloader = dict(
         data_root=data_root,
         ann_file="annotations/train_cocoformat.json",
         data_prefix=dict(img_path="train/"),
-        metainfo=dict(classes=("person", )),
+        metainfo=dict(CLASSES=("person", )),
         ref_img_sampler=dict(
             num_ref_imgs=1,
             frame_range=10,
@@ -79,7 +79,7 @@ val_dataloader = dict(
         data_root=data_root,
         ann_file="annotations/validation_cocoformat.json",
         data_prefix=dict(img_path="validation/"),
-        metainfo=dict(classes=("person", )),
+        metainfo=dict(CLASSES=("person", )),
         ref_img_sampler=None,
         load_as_video=True,
         test_mode=True,

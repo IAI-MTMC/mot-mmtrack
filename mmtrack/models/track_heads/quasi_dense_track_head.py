@@ -79,7 +79,8 @@ class QuasiDenseTrackHead(RoITrackHead):
             rpn_results = rpn_results_list[i]
             ref_rpn_results = ref_rpn_results_list[i]
             # rename rpn_results.bboxes to rpn_results.priors
-            rpn_results.priors = rpn_results.pop('bboxes')
+            if 'bboxes' in rpn_results:
+                rpn_results.priors = rpn_results.pop('bboxes')
             # rename ref_rpn_results.bboxes to ref_rpn_results.priors
             ref_rpn_results.priors = ref_rpn_results.pop('bboxes')
 
