@@ -1,12 +1,12 @@
 _base_ = [
     '../../_base_/models/faster-rcnn_r50_fpn.py',
-    '../../_base_/datasets/mot_challenge.py', 
-    '../../_base_/default_runtime.py'
+    '../../_base_/datasets/mot_challenge.py', '../../_base_/default_runtime.py'
 ]
 
 custom_imports = dict(
-    imports=['mmtrack.models.reid.pose_reid'],
-    allow_failed_imports=False)
+    imports=[
+        'mmtrack.models.reid.pose_reid',
+    ], allow_failed_imports=False)
 
 model = dict(
     type='DeepSORT',
@@ -31,7 +31,8 @@ model = dict(
                 num_stages=4,
                 out_indices=(3, ),
                 style='pytorch'),
-            neck=dict(type='GlobalAveragePooling', kernel_size=(8, 4), stride=1),
+            neck=dict(
+                type='GlobalAveragePooling', kernel_size=(8, 4), stride=1),
             head=dict(
                 type='LinearReIDHead',
                 num_fcs=1,
@@ -40,7 +41,8 @@ model = dict(
                 out_channels=128,
                 num_classes=380,
                 loss_cls=dict(type='mmcls.CrossEntropyLoss', loss_weight=1.0),
-                loss_triplet=dict(type='TripletLoss', margin=0.3, loss_weight=1.0),
+                loss_triplet=dict(
+                    type='TripletLoss', margin=0.3, loss_weight=1.0),
                 norm_cfg=dict(type='BN1d'),
                 act_cfg=dict(type='ReLU')),
             init_cfg=dict(
@@ -51,26 +53,28 @@ model = dict(
         pose_model=dict(
             type='TopdownPoseEstimator',
             _scope_='mmpose',
-            # data_preprocessor=dict(
-            #     type='PoseDataPreprocessor',
-            #     mean=[123.675, 116.28, 103.53],
-            #     std=[58.395, 57.12, 57.375],
-            #     bgr_to_rgb=True),
             data_preprocessor=None,
             backbone=dict(
                 type='ResNet',
                 depth=50,
-                init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50'),
+                init_cfg=dict(
+                    type='Pretrained', checkpoint='torchvision://resnet50'),
             ),
             head=dict(
                 type='HeatmapHead',
                 in_channels=2048,
                 out_channels=17,
                 loss=dict(type='KeypointMSELoss', use_target_weight=True),
-                decoder=dict(type='MSRAHeatmap', input_size=(192, 256), heatmap_size=(48, 64), sigma=2)),
+                decoder=dict(
+                    type='MSRAHeatmap',
+                    input_size=(192, 256),
+                    heatmap_size=(48, 64),
+                    sigma=2)),
             init_cfg=dict(
                 type='Pretrained',
-                checkpoint='https://download.openmmlab.com/mmpose/top_down/resnet/res50_coco_256x192-ec54d7f3_20200709.pth'),
+                checkpoint=
+                'https://download.openmmlab.com/mmpose/top_down/resnet/res50_coco_256x192-ec54d7f3_20200709.pth'
+            ),
             test_cfg=dict(
                 flip_test=True,
                 flip_mode='heatmap',
@@ -93,3 +97,33 @@ train_dataloader = None
 
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
+
+# dataset settings
+dataset_type = 'MOTChallengeDataset'
+data_root = '../../datasets/AIC23_Track1_MTMC_Tracking/'
+
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadTrackAnnotations', with_instance_id=True),
+    dict(type='mmdet.Resize', scale=(1088, 1088), keep_ratio=True),
+    dict(type='PackTrackInputs', pack_single_img=True)
+]
+
+# dataloader
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=2,
+    persistent_workers=True,
+    drop_last=False,
+    sampler=dict(type='VideoSampler'),
+    dataset=dict(
+        type=dataset_type,
+        data_root=data_root,
+        ann_file='annotations/validation_cocoformat_subset_0.2_consec.json',
+        data_prefix=dict(img_path='validation'),
+        metainfo=dict(CLASSES=('person', )),
+        ref_img_sampler=None,
+        load_as_video=True,
+        test_mode=True,
+        pipeline=test_pipeline))
+test_dataloader = val_dataloader

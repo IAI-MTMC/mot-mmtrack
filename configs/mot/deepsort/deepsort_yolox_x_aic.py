@@ -4,7 +4,7 @@ _base_ = [
     '../../_base_/default_runtime.py'
 ]
 
-img_scale = (800, 1440)
+img_scale = (1088, 1088)
 
 model = dict(
     type='DeepSORT',
@@ -57,6 +57,10 @@ model = dict(
         momentums=None,
         num_tentatives=4,
         num_frames_retain=120))
+
+train_cfg = None
+val_cfg = dict(type='ValLoop')
+test_cfg = dict(type='TestLoop')
 
 test_pipeline = [
     dict(type="LoadImageFromFile"),

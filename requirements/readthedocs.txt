@@ -2,5 +2,8 @@ mmcls>=1.0.0rc0
 mmcv>=2.0.0rc1
 mmdet>=3.0.0rc0
 mmengine>=0.1.0
+mmpose>=1.0.0rc0
 torch
 torchvision
+torchreid
+git+https://github.com/JonathonLuiten/TrackEval.git
