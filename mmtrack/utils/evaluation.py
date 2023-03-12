@@ -11,7 +11,7 @@ class MOTEvaluator:
     allowed_metrics = ['HOTA', 'CLEAR', 'Identity']
 
     def __init__(self, 
-                 trackers_dir: str, 
+                 tracker_dir: str, 
                  gts_dir: str,
                  metric: Union[str, List[str]] = ['HOTA', 'CLEAR', 'Identity']):
         if isinstance(metric, list):
@@ -25,7 +25,7 @@ class MOTEvaluator:
                 raise KeyError(f'metric {metric} is not supported.')
         self.metrics = metrics
 
-        self.trackers_dir = trackers_dir
+        self.tracker_dir = tracker_dir
         self.gts_dir = gts_dir
         self.benchmark = 'MOT17'
 
@@ -38,8 +38,8 @@ class MOTEvaluator:
 
         # need to split out the tracker name
         # caused by the implementation of TrackEval
-        pred_dir = self.trackers_dir.rsplit(osp.sep, 1)[0]
-        dataset_config = self.get_dataset_cfg(self.gts_dir, pred_dir)
+        trackers_dir, tracker_name = self.tracker_dir.rsplit(osp.sep, 1)
+        dataset_config = self.get_dataset_cfg(self.gts_dir, trackers_dir, tracker_name)
 
         evaluator = trackeval.Evaluator(eval_config)
         dataset = [trackeval.datasets.MotChallenge2DBox(dataset_config)]
@@ -51,7 +51,7 @@ class MOTEvaluator:
 
         output_res, _ = evaluator.evaluate(dataset, metrics)
         output_res = output_res['MotChallenge2DBox'][
-            self.TRACKER]['COMBINED_SEQ']['pedestrian']
+            tracker_name]['COMBINED_SEQ']['pedestrian']
 
         if 'HOTA' in self.metrics:
             logger.info('Evaluating HOTA Metrics...')
@@ -82,7 +82,7 @@ class MOTEvaluator:
 
         return eval_results
 
-    def get_dataset_cfg(self, gt_folder: str, tracker_folder: str):
+    def get_dataset_cfg(self, gt_folder: str, tracker_folder: str, tracker_name: str):
         """Get default configs for trackeval.datasets.MotChallenge2DBox.
 
         Args:
@@ -100,7 +100,7 @@ class MOTEvaluator:
             # Where to save eval results
             # (if None, same as TRACKERS_FOLDER)
             OUTPUT_FOLDER=None,
-            TRACKERS_TO_EVAL=None,
+            TRACKERS_TO_EVAL=[tracker_name],
             # Option values: ['pedestrian']
             CLASSES_TO_EVAL=['pedestrian'],
             # Option Values: 'MOT15', 'MOT16', 'MOT17', 'MOT20', 'DanceTrack'

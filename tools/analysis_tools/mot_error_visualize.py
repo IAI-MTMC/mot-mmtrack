@@ -5,19 +5,21 @@ import os
 import shutil
 
 import torch
-import tqdm
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import motmetrics as mm
 from mmengine.config import Config
 from mmcv import VideoReader
 
-from mmtrack.utils import register_all_modules
+from mmtrack.utils import register_all_modules, imshow_mot_errors
 from mmtrack.models import BaseMultiObjectTracker
 from mmtrack.apis import init_model, batch_inference_mot
 
 from mmtrack.structures import TrackDataSample
 from mmtrack.structures.bbox import bbox_xyxy_to_x1y1wh
+
+from mmtrack.utils.evaluation import MOTEvaluator
 
 
 def parse_args():
@@ -28,6 +30,7 @@ def parse_args():
     parser.add_argument('--device', default='cuda:0', help='device used for inference')
     parser.add_argument('--scenes-dir', help='path of the directory contains scenes')
     parser.add_argument('--out-dir', help='path of the directory that stores the visualization results')
+    parser.add_argument('--batch-size', type=int, default=1)
 
     args = parser.parse_args()
     return args
@@ -41,7 +44,18 @@ def compare_res_gts(results: List[TrackDataSample], gts: str):
         gts (str): The path of the ground truth file.
     """
     # convert the results to the format of motmetrics
-    res_df = pd.DataFrame(columns=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'], index=['FrameId', 'Id'])
+    res = {
+        'FrameId': [],
+        'Id': [],
+        'X': [],
+        'Y': [],
+        'Width': [],
+        'Height': [],
+        'Confidence': [],
+        'ClassId': [],
+        'Visibility': []
+    }
+
     for track_sample in results:
         frame_id = track_sample.metainfo['frame_id']
         track_ids = track_sample.pred_track_instances.instances_id
@@ -49,11 +63,25 @@ def compare_res_gts(results: List[TrackDataSample], gts: str):
         track_scores = track_sample.pred_track_instances.scores
 
         for track_id, track_bbox, track_score in zip(track_ids, track_bboxes, track_scores):
-            res_df.loc[frame_id, track_id] = [frame_id, track_id, track_bbox[0], track_bbox[1], track_bbox[2], track_bbox[3], track_score, 1, 1.0]
-    
+            res['FrameId'].append(frame_id)
+            res['Id'].append(track_id.item())
+            res['X'].append(track_bbox[0].item())
+            res['Y'].append(track_bbox[1].item())
+            res['Width'].append(track_bbox[2].item())
+            res['Height'].append(track_bbox[3].item())
+            res['Confidence'].append(track_score.item())
+            res['ClassId'].append(1)
+            res['Visibility'].append(1.0)
+
+    res_df = pd.DataFrame(res)
+    res_df = res_df.round({'X': 2, 'Y': 2, 'Width': 2, 'Height': 2, 'Confidence': 3})
+    res_df.set_index(['FrameId', 'Id'], inplace=True)
     # convert the gts to the format of motmetrics
-    gt_df = pd.read_csv(gts, names=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'ClassId', 'X', 'Y', 'Z'], index_col=['FrameId', 'Id'])
-    gt_df.drop(columns=['X', 'Y', 'Z'], inplace=True)
+    gt_df = pd.read_csv(gts, names=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'ClassId'], usecols=range(7))
+    # Insert the confidence column before the ClassId column
+    gt_df.insert(len(gt_df.columns) - 1, 'Confidence', 1.0)
+    gt_df['Visibility'] = 1.0
+    gt_df.set_index(['FrameId', 'Id'], inplace=True)
 
     acc = mm.utils.compare_to_groundtruth(gt_df, res_df)
 
@@ -100,6 +128,7 @@ def _save_trackeval_gt_pred(gt: pd.DataFrame, pred: pd.DataFrame, seq: str, pred
         pred_dir (str): The directory that stores the predicted annotations.
         gt_dir (str): The directory that stores the ground truth annotations.
     """
+    os.makedirs(os.path.join(gt_dir, seq))
     gt_path = os.path.join(gt_dir, seq, 'gt.txt')
     pred_path = os.path.join(pred_dir, seq + '.txt')
 
@@ -107,14 +136,10 @@ def _save_trackeval_gt_pred(gt: pd.DataFrame, pred: pd.DataFrame, seq: str, pred
     pred = pred.copy()
 
     pred.drop(columns=['ClassId', 'Visibility'], inplace=True)
-    pred['X'] = -1
-    pred['Y'] = -1
-    pred['Z'] = -1
-
-    # Insert the confidence column before the ClassId column
-    # to compatible with the format of TrackEval
-    gt.insert(len(gt.columns) - 1, 'Confidence', 1.0)
-    gt['Visibility'] = 1.0
+    pred.drop([0, 1], inplace=True) # Remove the first and second frames to match with gt
+    pred['A'] = -1
+    pred['B'] = -1
+    pred['C'] = -1
 
     # Save to text files
     gt.to_csv(gt_path, sep=',', header=False)
@@ -129,6 +154,7 @@ def _save_trackeval_gt_pred(gt: pd.DataFrame, pred: pd.DataFrame, seq: str, pred
     else:
         os.makedirs(seqmap_dir)
         with open(seqmap_file, 'w') as f:
+            f.write('name\n')
             f.write(seq + '\n')
 
     # Create seqinfo.ini
@@ -137,9 +163,9 @@ def _save_trackeval_gt_pred(gt: pd.DataFrame, pred: pd.DataFrame, seq: str, pred
         f.write('name=' + seq + '\n')
         f.write('imDir=img\n')
         f.write('frameRate=30\n')
-        f.write('seqLength=' + str(gt['FrameId'].max() + 1) + '\n')
-        f.write('imWidth=' + str(gt.at[0, 'Width']) + '\n')
-        f.write('imHeight=' + str(gt.at[0, 'Height']) + '\n')
+        f.write('seqLength=' + str(gt.index.get_level_values('FrameId').max() + 1) + '\n')
+        f.write('imWidth=1920\n')
+        f.write('imHeight=1080\n')
         f.write('imExt=.jpg\n')
 
 
@@ -148,13 +174,14 @@ def _make_trackeval_dirs(root_dir: str = "./cache", tracker_name: str = 'default
     if os.path.exists(root_dir):
         shutil.rmtree(root_dir)
 
-    tmp_gt_dir = os.path.join(root_dir, 'gt')
-    tmp_pred_dir = os.path.join(root_dir, tracker_name)
+    gt_dir = os.path.join(root_dir, 'gt')
+    trackers_dir = os.path.join(root_dir, "trackers")
+    tracker_dir = os.path.join(trackers_dir, tracker_name)
 
-    os.makedirs(tmp_gt_dir)
-    os.makedirs(tmp_pred_dir)
+    os.makedirs(gt_dir)
+    os.makedirs(tracker_dir)
 
-    return tmp_gt_dir, tmp_pred_dir
+    return gt_dir, trackers_dir, tracker_dir
 
 def main(args):
     register_all_modules()
@@ -163,7 +190,10 @@ def main(args):
     cfg = Config.fromfile(args.config)
     tracker_name = os.path.splitext(os.path.basename(args.config))[0]
     output_dir = os.path.join(args.out_dir, tracker_name)
-    tmp_gt_dir, tmp_pred_dir = _make_trackeval_dirs(tracker_name=tracker_name)
+    gt_dir, trackers_dir, tracker_dir = _make_trackeval_dirs(tracker_name=tracker_name)
+    
+    pred_cache_dir = "predcache"
+    os.makedirs(pred_cache_dir, exist_ok=True)
 
     if os.path.exists(output_dir):
         warn(f'{output_dir} already exists. It will be removed.')
@@ -184,61 +214,86 @@ def main(args):
             # load the video
             vid_path = os.path.join(camera.path, 'video.mp4')
             gt_path = os.path.join(camera.path, 'label.txt')
-
-            results = batch_test(model, vid_path, batch_size=args.batch_size)
+            
+            cached_res = os.path.join(pred_cache_dir, camera.name + ".pkl")
+            if os.path.exists(cached_res):
+                import torch
+                results = torch.load(cached_res)
+            else:
+                results = batch_test(model, vid_path, batch_size=args.batch_size)
+                import torch
+                torch.save(results, cached_res)
             acc, res, gt = compare_res_gts(results, gt_path)
-            _save_trackeval_gt_pred(gt, res, camera.name, tmp_pred_dir, tmp_gt_dir)
+            _save_trackeval_gt_pred(gt, res, camera.name, tracker_dir, gt_dir)
 
-            frames_id_list = sorted(
-            list(set(acc.mot_events.index.get_level_values(0))))
-            for frame_id in frames_id_list:
-                # events in the current frame
-                events = acc.mot_events.xs(frame_id)
-                cur_res = res.loc[frame_id] if frame_id in res.index else None
-                cur_gt = gt.loc[frame_id] if frame_id in gt.index else None
-                # path of image
-                # img = filenames_dict[video_name][frame_id]
-                fps = events[events.Type == 'FP']
-                fns = events[events.Type == 'MISS']
-                idsws = events[events.Type == 'SWITCH']
+            # frames_id_list = sorted(
+            # list(set(acc.mot_events.index.get_level_values(0))))
+            # vid_reader = VideoReader(vid_path)
+            # for frame_id in frames_id_list:
+            #     # events in the current frame
+            #     events = acc.mot_events.xs(frame_id)
+            #     cur_res = res.loc[frame_id] if frame_id in res.index else None
+            #     cur_gt = gt.loc[frame_id] if frame_id in gt.index else None
+            #     # path of image
+            #     # img = filenames_dict[video_name][frame_id]
+            #     fps = events[events.Type == 'FP']
+            #     fns = events[events.Type == 'MISS']
+            #     idsws = events[events.Type == 'SWITCH']
 
-                bboxes, ids, error_types = [], [], []
-                for fp_index in fps.index:
-                    hid = events.loc[fp_index].HId
-                    bboxes.append([
-                        cur_res.loc[hid].X, cur_res.loc[hid].Y,
-                        cur_res.loc[hid].X + cur_res.loc[hid].Width,
-                        cur_res.loc[hid].Y + cur_res.loc[hid].Height,
-                        cur_res.loc[hid].Confidence
-                    ])
-                    ids.append(hid)
-                    # error_type = 0 denotes false positive error
-                    error_types.append(0)
-                for fn_index in fns.index:
-                    oid = events.loc[fn_index].OId
-                    bboxes.append([
-                        cur_gt.loc[oid].X, cur_gt.loc[oid].Y,
-                        cur_gt.loc[oid].X + cur_gt.loc[oid].Width,
-                        cur_gt.loc[oid].Y + cur_gt.loc[oid].Height,
-                        cur_gt.loc[oid].Confidence
-                    ])
-                    ids.append(-1)
-                    # error_type = 1 denotes false negative error
-                    error_types.append(1)
-                for idsw_index in idsws.index:
-                    hid = events.loc[idsw_index].HId
-                    bboxes.append([
-                        cur_res.loc[hid].X, cur_res.loc[hid].Y,
-                        cur_res.loc[hid].X + cur_res.loc[hid].Width,
-                        cur_res.loc[hid].Y + cur_res.loc[hid].Height,
-                        cur_res.loc[hid].Confidence
-                    ])
-                    ids.append(hid)
-                    # error_type = 2 denotes id switch
-                    error_types.append(2)
-                if len(bboxes) == 0:
-                    bboxes = np.zeros((0, 5), dtype=np.float32)
-                else:
-                    bboxes = np.asarray(bboxes, dtype=np.float32)
-                ids = np.asarray(ids, dtype=np.int32)
-                error_types = np.asarray(error_types, dtype=np.int32)
+            #     bboxes, ids, error_types = [], [], []
+            #     for fp_index in fps.index:
+            #         hid = events.loc[fp_index].HId
+            #         bboxes.append([
+            #             cur_res.loc[hid].X, cur_res.loc[hid].Y,
+            #             cur_res.loc[hid].X + cur_res.loc[hid].Width,
+            #             cur_res.loc[hid].Y + cur_res.loc[hid].Height,
+            #             cur_res.loc[hid].Confidence
+            #         ])
+            #         ids.append(hid)
+            #         # error_type = 0 denotes false positive error
+            #         error_types.append(0)
+            #     for fn_index in fns.index:
+            #         oid = events.loc[fn_index].OId
+            #         bboxes.append([
+            #             cur_gt.loc[oid].X, cur_gt.loc[oid].Y,
+            #             cur_gt.loc[oid].X + cur_gt.loc[oid].Width,
+            #             cur_gt.loc[oid].Y + cur_gt.loc[oid].Height,
+            #             cur_gt.loc[oid].Confidence
+            #         ])
+            #         ids.append(-1)
+            #         # error_type = 1 denotes false negative error
+            #         error_types.append(1)
+            #     for idsw_index in idsws.index:
+            #         hid = events.loc[idsw_index].HId
+            #         bboxes.append([
+            #             cur_res.loc[hid].X, cur_res.loc[hid].Y,
+            #             cur_res.loc[hid].X + cur_res.loc[hid].Width,
+            #             cur_res.loc[hid].Y + cur_res.loc[hid].Height,
+            #             cur_res.loc[hid].Confidence
+            #         ])
+            #         ids.append(hid)
+            #         # error_type = 2 denotes id switch
+            #         error_types.append(2)
+            #     if len(bboxes) == 0:
+            #         bboxes = np.zeros((0, 5), dtype=np.float32)
+            #     else:
+            #         bboxes = np.asarray(bboxes, dtype=np.float32)
+            #     ids = np.asarray(ids, dtype=np.int32)
+            #     error_types = np.asarray(error_types, dtype=np.int32)
+                
+            #     imshow_mot_errors(
+            #         vid_reader[frame_id],
+            #         bboxes,
+            #         ids,
+            #         error_types,
+            #         show=False,
+            #         out_file=os.path.join(output_dir,
+            #                         f'{camera.name}/{frame_id:06d}.jpg')
+            #         if args.out_dir else None)
+        
+        evaluator = MOTEvaluator(tracker_dir, gt_dir)
+        evaluator.compute_metrics()
+
+if __name__ == '__main__':
+    args = parse_args()
+    main(args)
