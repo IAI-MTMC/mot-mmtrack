@@ -8,7 +8,7 @@ model = dict(
         batch_augments=[
             dict(
                 type='mmdet.BatchSyncRandomResize',
-                random_size_range=(480, 800),
+                random_size_range=(320, 640),
                 size_divisor=32,
                 interval=10)
         ]),
@@ -17,18 +17,18 @@ model = dict(
         type='YOLOX',
         backbone=dict(
             type='CSPDarknet', 
-            deepen_factor=1.0, 
-            widen_factor=1.0),
+            deepen_factor=0.67, 
+            widen_factor=0.75),
         neck=dict(
             type='YOLOXPAFPN',
-            in_channels=[256, 512, 1024],
-            out_channels=256,
-            num_csp_blocks=3),
+            in_channels=[192, 284, 786],
+            out_channels=192,
+            num_csp_blocks=2),
         bbox_head=dict(
             type='YOLOXHead',
             num_classes=80,
-            in_channels=256,
-            feat_channels=256),
+            in_channels=192,
+            feat_channels=192),
         train_cfg=dict(
             assigner=dict(type='SimOTAAssigner', center_radius=2.5)),
         test_cfg=dict(
