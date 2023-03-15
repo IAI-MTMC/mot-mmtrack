@@ -12,7 +12,7 @@ CLASSES = [dict(id=1, name='person')]
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument("data-dir", help="Path to the data directory")
+    parser.add_argument("data_dir", help="Path to the data directory")
     parser.add_argument("--min-box-height", type=int, default=-1, help="Minimum height of the bounding box")
     parser.add_argument("--min-box-width", type=int, default=-1, help="Minimum width of the bounding box")
 
@@ -59,48 +59,6 @@ def parse_gts(ann_path: str):
             outs[true_frame_id].append(ann)
     return outs
 
-def get_image_infos(frames_dir: str, video_name: str):
-    """
-    Get the frames information from the directory containing the frame images.
-
-    Args:
-        frames_dir (str): Path to the directory containing the images.
-        video_name (str): Name of the video.
-
-    Returns:
-        list: List of image information order by frame_id. Each is a dict with keys:
-            - `id`: The id of the image.
-            - `file_name`: The name of the image file.
-            - `height`: The height of the image.
-            - `width`: The width of the image.
-            - `frame_id`: The frame id of the image.
-            - `true_frame_id`: The true frame id of the image.
-    """
-    outs = defaultdict(list)
-    height, width = None, None
-    
-    prev_frame_id = -1
-    for img_path in os.scandir(frames_dir):
-        file_name = os.path.splitext(img_path.name)[0]
-        true_frame_id = int(file_name)
-
-        assert true_frame_id > prev_frame_id, f"Frame ids are not in order: {true_frame_id} <= {prev_frame_id}"
-        prev_frame_id = true_frame_id
-
-        if height is None:
-            height, width = cv2.imread(img_path.path).shape[:2]
-        
-        img = dict(
-            file_name=os.path.join(video_name, "imgs", img_path.name),
-            height=height,
-            width=width,
-            frame_id=id,
-            true_frame_id=true_frame_id)
-
-        outs[true_frame_id].append(img)
-    
-    return outs
-
 
 def main(args):
     vid_id, img_id, ann_id = 0, 0, 0
@@ -140,11 +98,12 @@ def main(args):
                             if height is None:
                                 height, width = cv2.imread(image.path).shape[:2]
                             
+                            file_name = osp.join(video_name, "imgs", image.name)
                             true_frame_id = int(osp.splitext(image.name)[0])
                             image = dict(
                                 id=img_id,
                                 video_id=vid_id,
-                                file_name=image.path,
+                                file_name=file_name,
                                 height=height,
                                 width=width,
                                 frame_id=frame_id,

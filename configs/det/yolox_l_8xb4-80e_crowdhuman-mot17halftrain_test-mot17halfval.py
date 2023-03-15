@@ -2,7 +2,7 @@ _base_ = ['../_base_/default_runtime.py']
 
 data_root = 'data/MOT17/'
 
-img_scale = (640, 1088)
+img_scale = (1440, 800)
 batch_size = 4
 num_gpus = 1
 
@@ -19,7 +19,7 @@ model = dict(
         ]),
     _scope_='mmdet',
     type='YOLOX',
-    backbone=dict(type='CSPDarknet', deepen_factor=0.67, widen_factor=0.75),
+    backbone=dict(type='CSPDarknet', deepen_factor=1.0, widen_factor=1.0),
     neck=dict(
         type='YOLOXPAFPN',
         in_channels=[256, 512, 1024],
@@ -56,7 +56,7 @@ train_pipeline = [
     dict(type='RandomFlip', prob=0.5),
     dict(
         type='Resize',
-        scale=img_scale,
+        scale=img_scale[::-1],
         keep_ratio=True,
         clip_object_border=False),
     dict(type='Pad', size_divisor=32, pad_val=dict(img=(114.0, 114.0, 114.0))),
@@ -65,7 +65,7 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
-    dict(type='Resize', scale=img_scale, keep_ratio=True),
+    dict(type='Resize', scale=img_scale[::-1], keep_ratio=True),
     dict(type='Pad', size_divisor=32, pad_val=dict(img=(114.0, 114.0, 114.0))),
     dict(
         type='PackDetInputs',

@@ -75,6 +75,7 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
+    dict(type='LoadTrackAnnotations', with_instance_id=True),
     dict(type='mmdet.Resize', scale=img_scale, keep_ratio=True),
     dict(
         type='mmdet.Pad',

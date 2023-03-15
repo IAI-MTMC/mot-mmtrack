@@ -10,7 +10,7 @@ import mmcv
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument("data-dir", help="Path to the data directory")
+    parser.add_argument("data_dir", help="Path to the data directory")
     parser.add_argument("--fps", type=int, default=5, help="FPS to extract images at. Default: 5")
     parser.add_argument("--num-workers", type=int, default=mp.cpu_count(), help="Number of workers to use. Default: all available cpus")
 

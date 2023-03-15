@@ -1,6 +1,6 @@
 _base_ = ["../_base_/default_runtime.py", "../_base_/datasets/aicity_challenge_det.py"]
 
-img_scale = (640, 1088)
+img_scale = (1440, 800)
 batch_size = 8
 num_gpus = 1
 
@@ -47,14 +47,14 @@ train_pipeline = [
     ),
     dict(type="YOLOXHSVRandomAug"),
     dict(type="RandomFlip", prob=0.5),
-    dict(type="Resize", scale=img_scale, keep_ratio=True, clip_object_border=False),
+    dict(type="Resize", scale=img_scale[::-1], keep_ratio=True, clip_object_border=False),
     dict(type="Pad", size_divisor=32, pad_val=dict(img=(114.0, 114.0, 114.0))),
     dict(type="FilterAnnotations", min_gt_bbox_wh=(30, 130), keep_empty=False),
     dict(type="PackDetInputs"),
 ]
 test_pipeline = [
     dict(type="LoadImageFromFile"),
-    dict(type="Resize", scale=img_scale, keep_ratio=True),
+    dict(type="Resize", scale=img_scale[::-1], keep_ratio=True),
     dict(type="Pad", size_divisor=32, pad_val=dict(img=(114.0, 114.0, 114.0))),
     dict(
         type="PackDetInputs",
