@@ -44,9 +44,7 @@ def _check_sorted_by_key(l, key: str = "id"):
             return False
     return True
 
-def main():
-    args = parse_args()
-
+def main(args):
     annotation_path = Path(args.annotation_path)
 
     annotations = mmengine.load(annotation_path)
@@ -101,4 +99,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(args)

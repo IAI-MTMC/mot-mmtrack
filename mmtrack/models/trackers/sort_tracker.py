@@ -52,6 +52,8 @@ class SORTTracker(BaseTracker):
         self.reid = reid
         self.match_iou_thr = match_iou_thr
         self.num_tentatives = num_tentatives
+        # from mmtrack.utils.debug import ReIDDebugger
+        # self.reid_debugger = ReIDDebugger("reid_debug_low")
 
     @property
     def confirmed_ids(self) -> List:
@@ -180,6 +182,12 @@ class SORTTracker(BaseTracker):
                 crops = self.crop_imgs(reid_img, metainfo, bboxes.clone(),
                                        rescale)
                 embeds = model.reid(crops, mode='tensor')
+
+                # for crop, embed in zip(crops, embeds):
+                #     reid_norm_cfg = self.reid['img_norm_cfg']    
+                #     self.reid_debugger.update(frame_id, crop, reid_norm_cfg['mean'], reid_norm_cfg['std'], embed)
+                # self.reid_debugger.visualize()
+                # self.reid_debugger.clear(keep_current=True)
 
                 # reid
                 if len(active_ids) > 0:

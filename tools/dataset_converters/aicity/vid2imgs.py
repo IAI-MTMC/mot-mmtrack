@@ -48,9 +48,7 @@ def extract_images(vid_path: str, imgs_dir: str, fps: int):
         frame = reader.get_frame(frame_id)
         mmcv.imwrite(frame, os.path.join(imgs_dir, f"{frame_id:06d}.jpg"))
 
-def main():
-    args = parse_args()
-
+def main(args):
     def extract_images_for_camera(camera_dir):
         if camera_dir.is_dir():
             vid_path = os.path.join(camera_dir.path, "video.mp4")
@@ -68,4 +66,5 @@ def main():
                     executor.map(extract_images_for_camera, os.scandir(scene_dir.path))
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(args)
