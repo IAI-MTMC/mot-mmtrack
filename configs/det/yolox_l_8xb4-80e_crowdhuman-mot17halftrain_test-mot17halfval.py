@@ -2,9 +2,9 @@ _base_ = ['../_base_/default_runtime.py']
 
 data_root = 'data/MOT17/'
 
-img_scale = (800, 1440)
+img_scale = (640, 1088)
 batch_size = 4
-num_gpus = 4
+num_gpus = 1
 
 model = dict(
     data_preprocessor=dict(
@@ -22,11 +22,11 @@ model = dict(
     backbone=dict(type='CSPDarknet', deepen_factor=0.67, widen_factor=0.75),
     neck=dict(
         type='YOLOXPAFPN',
-        in_channels=[192, 284, 768],
-        out_channels=192,
-        num_csp_blocks=2),
+        in_channels=[256, 512, 1024],
+        out_channels=256,
+        num_csp_blocks=3),
     bbox_head=dict(
-        type='YOLOXHead', num_classes=1, in_channels=192, feat_channels=192),
+        type='YOLOXHead', num_classes=1, in_channels=256, feat_channels=256),
     train_cfg=dict(assigner=dict(type='SimOTAAssigner', center_radius=2.5)),
     test_cfg=dict(score_thr=0.01, nms=dict(type='nms', iou_threshold=0.7)),
     init_cfg=dict(
