@@ -7,7 +7,7 @@ _base_ = [
 custom_imports = dict(
     imports=['mmtrack.models.reid.my_reid'], allow_failed_imports=False)
 
-img_scale = (1088, 1088)
+img_scale = (800, 1440)
 
 model = dict(
     type='DeepSORT',
