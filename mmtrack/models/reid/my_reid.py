@@ -52,7 +52,7 @@ class MyReID(BaseModel):
     def head(self):
 
         class Head:
-            out_channels = self.reid.model.feature_dim
+            out_channels = self.model.feature_dim
 
         return Head()
 
