@@ -72,11 +72,11 @@ class OCSORTTracker(SORTTracker):
             self.tracks[id].tentative = False
         else:
             self.tracks[id].tentative = True
-        bbox = bbox_xyxy_to_cxcyah(self.tracks[id].bboxes[-1])  # size = (1, 4)
-        assert bbox.ndim == 2 and bbox.shape[0] == 1
-        bbox = bbox.squeeze(0).cpu().numpy()
-        self.tracks[id].mean, self.tracks[id].covariance = self.kf.initiate(
-            bbox)
+        # bbox = bbox_xyxy_to_cxcyah(self.tracks[id].bboxes[-1])  # size = (1, 4)
+        # assert bbox.ndim == 2 and bbox.shape[0] == 1
+        # bbox = bbox.squeeze(0).cpu().numpy()
+        # self.tracks[id].mean, self.tracks[id].covariance = self.kf.initiate(
+        #     bbox)
         # track.obs maintains the history associated detections to this track
         self.tracks[id].obs = []
         bbox_id = self.memo_items.index('bboxes')
@@ -91,14 +91,14 @@ class OCSORTTracker(SORTTracker):
     def update_track(self, id, obj):
         """Update a track."""
         super().update_track(id, obj)
-        if self.tracks[id].tentative:
-            if len(self.tracks[id]['bboxes']) >= self.num_tentatives:
-                self.tracks[id].tentative = False
-        bbox = bbox_xyxy_to_cxcyah(self.tracks[id].bboxes[-1])  # size = (1, 4)
-        assert bbox.ndim == 2 and bbox.shape[0] == 1
-        bbox = bbox.squeeze(0).cpu().numpy()
-        self.tracks[id].mean, self.tracks[id].covariance = self.kf.update(
-            self.tracks[id].mean, self.tracks[id].covariance, bbox)
+        # if self.tracks[id].tentative:
+        #     if len(self.tracks[id]['bboxes']) >= self.num_tentatives:
+        #         self.tracks[id].tentative = False
+        # bbox = bbox_xyxy_to_cxcyah(self.tracks[id].bboxes[-1])  # size = (1, 4)
+        # assert bbox.ndim == 2 and bbox.shape[0] == 1
+        # bbox = bbox.squeeze(0).cpu().numpy()
+        # self.tracks[id].mean, self.tracks[id].covariance = self.kf.update(
+        #     self.tracks[id].mean, self.tracks[id].covariance, bbox)
         self.tracks[id].tracked = True
         bbox_id = self.memo_items.index('bboxes')
         self.tracks[id].obs.append(obj[bbox_id])
