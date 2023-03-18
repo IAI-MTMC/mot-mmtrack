@@ -1,6 +1,6 @@
 _base_ = [
     '../../_base_/models/yolox_x_8x8.py',
-    '../../_base_/datasets/aicity_challenge.py', 
+    '../../_base_/datasets/mot_challenge.py', 
     '../../_base_/default_runtime.py'
 ]
 
@@ -59,7 +59,7 @@ test_pipeline = [
 train_dataloader = None
 val_dataloader = dict(
     dataset=dict(
-        ann_file='annotations/validation_cocoformat_subset_0.2_consec.json',
+        ann_file='annotations/half-val_cocoformat.json',
         pipeline=test_pipeline))
 test_dataloader = val_dataloader
 
@@ -67,8 +67,8 @@ train_cfg = None
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
-# # evaluator
-# val_evaluator = dict(postprocess_tracklet_cfg=[
-#     dict(type='InterpolateTracklets', min_num_frames=5, max_num_frames=20)
-# ])
-# test_evaluator = val_evaluator
+# evaluator
+val_evaluator = dict(postprocess_tracklet_cfg=[
+    dict(type='InterpolateTracklets', min_num_frames=5, max_num_frames=20)
+])
+test_evaluator = val_evaluator

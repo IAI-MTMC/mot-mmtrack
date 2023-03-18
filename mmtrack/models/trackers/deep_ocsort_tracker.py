@@ -21,13 +21,16 @@ class DeepOCSORTTracker(OCSORTTracker):
     def __init__(self,
                  det_momentum_thr: float = 0.8,
                  embed_momentum_factor: float = 0.95,
+                 embed_weight: float = 0.75,
+                 embed_dist_diff_thr: float = 0.5,
                  **kwargs):
         super().__init__(**kwargs)
         self.det_momentum_thr = det_momentum_thr
 
         assert self.momentums is None, "DeepOCSORT does not support momentums."
         self.embed_momentum_factor = embed_momentum_factor
-        self.w_assoc_embed = 0.75
+        self.w_assoc_embed = embed_weight
+        self.max_diff = embed_dist_diff_thr
     
     def init_track(self, id, obj):
         """Initialize a track."""
@@ -55,17 +58,17 @@ class DeepOCSORTTracker(OCSORTTracker):
         # Needs two columns at least to make sense to boost
         if embed_costs.size(1) >= 2:
             for i in range(embed_costs.size(0)):
-                inds = torch.argsort(embed_costs[i], descending=True)
+                inds = torch.argsort(embed_costs[i])
                 # Row weight is difference between top / second top
-                row_weight = min(embed_costs[i, inds[0]] - embed_costs[i, inds[1]], max_diff)
+                row_weight = min(embed_costs[i, inds[1]] - embed_costs[i, inds[0]], max_diff)
                 # Add to row
                 w_emb_bonus[i] += row_weight / 2
-            
+
         if embed_costs.size(0) >= 2:
             for j in range(embed_costs.size(1)):
-                inds = torch.argsort(embed_costs[:, j], descending=True)
+                inds = torch.argsort(embed_costs[:, j])
                 # Row weight is difference between top / second top
-                col_weight = min(embed_costs[inds[0], j] - embed_costs[inds[1], j], max_diff)
+                col_weight = min(embed_costs[inds[1], j] - embed_costs[inds[0], j], max_diff)
                 # Add to row
                 w_emb_bonus[:, j] += col_weight / 2
         
@@ -143,24 +146,27 @@ class DeepOCSORTTracker(OCSORTTracker):
 
             # compute appearance distance
             if det_embeds is not None:
-                track_embeds = torch.stack(
+                track_embeds = torch.cat(
                     [self.tracks[id].embed_momentum for id in ids]).to(
                         det_embeds.device)
-                embed_dists = torch.cdist(track_embeds, det_embeds)
+                embed_dists = torch.cdist(track_embeds, det_embeds, compute_mode='use_mm_for_euclid_dist')
                 weighted_matrix = self.compute_adaptive_weighted_matrix(
                     embed_dists,
-                    self.w_assoc_embed)
+                    self.w_assoc_embed,
+                    self.max_diff)
                 embed_dists *= weighted_matrix
 
                 dists += embed_dists.cpu().numpy()
 
-        # bipartite match
-        if dists.size > 0:
-            cost, row, col = lap.lapjv(
-                dists, extend_cost=True, cost_limit=1 - match_iou_thr)
-        else:
-            row = np.zeros(len(ids)).astype(np.int32) - 1
-            col = np.zeros(len(det_bboxes)).astype(np.int32) - 1
+        # # bipartite match
+        # if dists.size > 0:
+        #     cost, row, col = lap.lapjv(
+        #         dists, extend_cost=True, cost_limit=1 - match_iou_thr)
+        # else:
+        #     row = np.zeros(len(ids)).astype(np.int32) - 1
+        #     col = np.zeros(len(det_bboxes)).astype(np.int32) - 1
+        from motmetrics.lap import linear_sum_assignment
+        row, col = linear_sum_assignment(dists)
         return row, col
 
     def track(self, 
@@ -406,6 +412,7 @@ class DeepOCSORTTracker(OCSORTTracker):
             ids=ids,
             bboxes=bboxes,
             labels=labels,
+            scores=scores,
             embeds=det_embeds if self.with_reid else None,
             frame_ids=frame_id)
 
@@ -417,5 +424,3 @@ class DeepOCSORTTracker(OCSORTTracker):
         pred_track_instances.instances_id = ids
 
         return pred_track_instances
-
-                
