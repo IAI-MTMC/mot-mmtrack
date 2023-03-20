@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 import mmcv
 import mmengine
 
-from mmtrack.apis import init_model, batch_inference_mot
+from mmtrack.apis import batch_inference_mot, init_model
 from mmtrack.utils import register_all_modules
 from mmtrack.utils.visualization import draw_tracked_instances
 
@@ -24,6 +24,7 @@ def parse_args():
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     args = parser.parse_args()
     return args
+
 
 def main(args):
     assert args.output
@@ -75,17 +76,18 @@ def main(args):
             batched_imgs.append(imgs[frame_id_cnt])
             batch_frame_ids.append(frame_id_cnt)
             frame_id_cnt += 1
-        
+
         results = batch_inference_mot(model, batched_imgs, batch_frame_ids)
         outputs.extend(results)
-        
+
         prog_bar.update(len(results))
 
     print(f'\nmaking the output video at {args.output} with a FPS of {fps}')
     import cv2
 
     if OUT_VIDEO:
-        vwriter = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'mp4v'), fps, (1920, 1080))
+        vwriter = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'mp4v'),
+                                  fps, (1920, 1080))
     for result in outputs:
         frame_id = result.metainfo['frame_id']
         out_img = draw_tracked_instances(imgs[frame_id], result)

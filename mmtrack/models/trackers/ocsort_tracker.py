@@ -4,14 +4,14 @@ from typing import List
 import lap
 import numpy as np
 import torch
-from torch import Tensor
 from addict import Dict
-from mmengine.structures import InstanceData
 from mmdet.structures.bbox import bbox_overlaps
+from mmengine.structures import InstanceData
+from torch import Tensor
 
-from mmtrack.structures.bbox import bbox_cxcyah_to_xyxy, bbox_xyxy_to_cxcyah
 from mmtrack.registry import MODELS
 from mmtrack.structures import TrackDataSample
+from mmtrack.structures.bbox import bbox_cxcyah_to_xyxy, bbox_xyxy_to_cxcyah
 from mmtrack.utils import OptConfigType
 from .sort_tracker import SORTTracker
 
@@ -348,9 +348,10 @@ class OCSORTTracker(SORTTracker):
             labels = labels[valid_inds]
             scores = scores[valid_inds]
             num_new_tracks = bboxes.size(0)
-            ids = torch.arange(self.num_tracks,
-                               self.num_tracks + num_new_tracks,
-                               dtype=torch.long).to(bboxes.device)
+            ids = torch.arange(
+                self.num_tracks,
+                self.num_tracks + num_new_tracks,
+                dtype=torch.long).to(bboxes.device)
             self.num_tracks += num_new_tracks
         else:
             # 0. init
@@ -379,11 +380,8 @@ class OCSORTTracker(SORTTracker):
 
             # 2. match detections and tracks' predicted locations
             match_track_inds, raw_match_det_inds = self.ocm_assign_ids(
-                self.confirmed_ids,
-                det_bboxes,
-                det_scores,
-                self.weight_iou_with_det_scores,
-                self.match_iou_thr)
+                self.confirmed_ids, det_bboxes, det_scores,
+                self.weight_iou_with_det_scores, self.match_iou_thr)
             # '-1' mean a detection box is not matched with tracklets in
             # previous frame
             valid = raw_match_det_inds > -1
@@ -407,11 +405,8 @@ class OCSORTTracker(SORTTracker):
             # the unconfirmed tracks
             (tentative_match_track_inds,
              tentative_match_det_inds) = self.ocm_assign_ids(
-                 self.unconfirmed_ids,
-                 unmatch_det_bboxes,
-                 unmatch_det_scores,
-                 self.weight_iou_with_det_scores, 
-                 self.match_iou_thr)
+                 self.unconfirmed_ids, unmatch_det_bboxes, unmatch_det_scores,
+                 self.weight_iou_with_det_scores, self.match_iou_thr)
             valid = tentative_match_det_inds > -1
             unmatch_det_ids[valid] = torch.tensor(self.unconfirmed_ids)[
                 tentative_match_det_inds[valid]].to(labels)
@@ -450,11 +445,8 @@ class OCSORTTracker(SORTTracker):
                                             device=labels.device)
 
                 _, ocr_match_det_inds = self.ocr_assign_ids(
-                    last_observations, 
-                    unmatch_det_bboxes, 
-                    unmatch_det_scores,
-                    self.weight_iou_with_det_scores,
-                    self.match_iou_thr)
+                    last_observations, unmatch_det_bboxes, unmatch_det_scores,
+                    self.weight_iou_with_det_scores, self.match_iou_thr)
 
                 valid = ocr_match_det_inds > -1
                 remain_det_ids[valid] = unmatched_track_inds.clone()[

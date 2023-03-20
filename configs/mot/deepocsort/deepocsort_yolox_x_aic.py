@@ -1,6 +1,6 @@
 _base_ = [
     '../../_base_/models/yolox_x_8x8.py',
-    '../../_base_/datasets/aicity_challenge.py', 
+    '../../_base_/datasets/aicity_challenge.py',
     '../../_base_/default_runtime.py'
 ]
 
@@ -21,14 +21,14 @@ model = dict(
         test_cfg=dict(score_thr=0.01, nms=dict(type='nms', iou_threshold=0.7)),
         init_cfg=dict(
             type='Pretrained',
-            checkpoint='checkpoints/yolox_x_crowdhuman_mot17-private-half.pth'  # noqa: E501
+            checkpoint=
+            'checkpoints/yolox_x_crowdhuman_mot17-private-half.pth'  # noqa: E501
         )),
     motion=dict(type='KalmanFilter'),
     reid=dict(
         type='MyReID',
         model_name='osnet_x1_0',
-        model_path=
-        'checkpoints/reid_osnet_aic.pth.tar-5',
+        model_path='checkpoints/reid_osnet_aic.pth.tar-5',
         device='cuda'),
     tracker=dict(
         type='DeepOCSORTTracker',
@@ -41,7 +41,7 @@ model = dict(
             img_norm_cfg=dict(
                 mean=[123.675, 116.28, 103.53],
                 std=[58.395, 57.12, 57.375],
-                to_rgb=True)), # Change channel order (1, 2, 3) -> (3, 2, 1)
+                to_rgb=True)),  # Change channel order (1, 2, 3) -> (3, 2, 1)
         weight_iou_with_det_scores=False,
         match_iou_thr=0.5,
         num_tentatives=3,
@@ -51,7 +51,7 @@ model = dict(
 
 test_pipeline = [
     dict(type='LoadImageFromFile'),
-    dict(type="LoadTrackAnnotations", with_instance_id=True),
+    dict(type='LoadTrackAnnotations', with_instance_id=True),
     dict(type='mmdet.Resize', scale=img_scale, keep_ratio=True),
     dict(type='PackTrackInputs', pack_single_img=True)
 ]

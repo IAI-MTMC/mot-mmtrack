@@ -6,7 +6,6 @@ from torch import Tensor
 
 from mmtrack.registry import MODELS, TASK_UTILS
 from mmtrack.utils import OptConfigType, SampleList
-
 from .base import BaseMultiObjectTracker
 
 
@@ -45,8 +44,7 @@ class OCSORT(BaseMultiObjectTracker):
         """Calculate losses from a batch of inputs and data samples."""
         return self.detector.loss(inputs, data_samples, **kwargs)
 
-
-    def predict(self, 
+    def predict(self,
                 inputs: Dict[str, Tensor],
                 data_samples: SampleList,
                 rescale: bool = True,
@@ -90,7 +88,7 @@ class OCSORT(BaseMultiObjectTracker):
         assert len(det_results) == 1, 'Batch inference is not supported.'
         track_data_sample.pred_det_instances = det_results[
             0].pred_instances.clone()
-        
+
         pred_track_instances = self.tracker.track(
             model=self,
             img=img,

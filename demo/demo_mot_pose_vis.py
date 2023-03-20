@@ -6,12 +6,12 @@ from argparse import ArgumentParser
 
 import mmcv
 import mmengine
+from mmpose.structures import merge_data_samples
+from mmpose.utils import register_all_modules as register_all_modules_pose
 
 from mmtrack.apis import inference_mot, init_model
-from mmpose.structures import merge_data_samples
 from mmtrack.registry import VISUALIZERS
 from mmtrack.utils import register_all_modules
-from mmpose.utils import register_all_modules as register_all_modules_pose
 
 
 def parse_args():

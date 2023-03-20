@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 from typing import List
 
 import numpy as np
@@ -10,7 +11,7 @@ from mmtrack.structures import TrackDataSample
 
 
 def batch_inference_mot(model: nn.Module, imgs: List[np.ndarray],
-                  frame_ids: List[int]) -> List[TrackDataSample]:
+                        frame_ids: List[int]) -> List[TrackDataSample]:
     """Inference image(s) with the mot model.
 
     Args:
@@ -29,7 +30,9 @@ def batch_inference_mot(model: nn.Module, imgs: List[np.ndarray],
     data_samples = []
     for frame_id, img in zip(frame_ids, imgs):
         data = dict(
-            img=img.astype(np.float32), frame_id=frame_id, ori_shape=img.shape[:2])
+            img=img.astype(np.float32),
+            frame_id=frame_id,
+            ori_shape=img.shape[:2])
         data = test_pipeline(data)
         data_samples.append(data)
     data_samples = default_collate(data_samples)

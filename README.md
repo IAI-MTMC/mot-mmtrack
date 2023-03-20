@@ -1,5 +1,7 @@
 # Installation
+
 To setup `mot-mmtrack`, run the following command:
+
 ```bash
 conda create -n mot-mmtrack python=3.10
 pip install torch torchvision
@@ -10,7 +12,9 @@ pip install -v -e .
 ```
 
 # Prepare dataset
+
 To extract images from videos, run:
+
 ```bash
 python tools/dataset_converters/aicity/vid2imgs.py
     ${DATA_DIR}
@@ -19,6 +23,7 @@ python tools/dataset_converters/aicity/vid2imgs.py
 ```
 
 Run this script to get the annnotations in `MOTChallenge` format:
+
 ```bash
 python tools/dataset_converters/aicity/aicity2coco.py \
     ${DATA_DIR} \
@@ -27,7 +32,9 @@ python tools/dataset_converters/aicity/aicity2coco.py \
 ```
 
 # Usage
+
 Run the demo:
+
 ```bash
 python demo/batch_demo_mot.py \
     ${PATH_TO_YOUR_CONFIG} \

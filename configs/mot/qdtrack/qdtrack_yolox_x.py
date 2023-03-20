@@ -1,6 +1,5 @@
 _base_ = [
-    '../../_base_/models/yolox_x_8x8.py',
-    '../../_base_/default_runtime.py',
+    '../../_base_/models/yolox_x_8x8.py', '../../_base_/default_runtime.py',
     '../../_base_/datasets/aicity_challenge.py'
 ]
 
@@ -10,14 +9,14 @@ strides = [8, 16, 32]
 model = dict(
     type='QDTrackSSTG',
     data_preprocessor=dict(
-        _delete_=True,
-        type='TrackDataPreprocessor',
-        pad_size_divisor=32),
+        _delete_=True, type='TrackDataPreprocessor', pad_size_divisor=32),
     freeze_detector=True,
     detector=dict(
         _scope_='mmdet',
         bbox_head=dict(num_classes=1),
-        train_cfg=dict(score_thr=0, nms=dict(type='nms', iou_threshold=0.7, max_num=1000)),
+        train_cfg=dict(
+            score_thr=0, nms=dict(type='nms', iou_threshold=0.7,
+                                  max_num=1000)),
         test_cfg=dict(score_thr=0.01, nms=dict(type='nms', iou_threshold=0.7)),
         init_cfg=dict(
             type='Pretrained',
@@ -80,8 +79,7 @@ model = dict(
         with_cats=False,
         match_metric='bisoftmax'),
     init_cfg=dict(
-        type='Pretrained',
-        checkpoint='work_dirs/qdtrack_yolox_x/epoch_5.pth'))
+        type='Pretrained', checkpoint='work_dirs/qdtrack_yolox_x/epoch_5.pth'))
 
 # data pipeline
 train_pipeline = [
@@ -91,10 +89,7 @@ train_pipeline = [
         transforms=[
             dict(type='LoadImageFromFile'),
             dict(type='LoadTrackAnnotations', with_instance_id=True),
-            dict(
-                type='mmdet.Resize',
-                scale=img_scale,
-                keep_ratio=True),
+            dict(type='mmdet.Resize', scale=img_scale, keep_ratio=True),
             dict(type='mmdet.PhotoMetricDistortion')
         ]),
     dict(
@@ -118,11 +113,12 @@ train_pipeline = [
 # dataset settings
 train_dataloader = dict(
     dataset=dict(
-        ann_file="annotations/train_cocoformat_subset_0.1_consec.json",
+        ann_file='annotations/train_cocoformat_subset_0.1_consec.json',
         pipeline=train_pipeline))
 
 val_dataloader = dict(
-    dataset=dict(ann_file="annotations/validation_cocoformat_subset_0.2_consec.json"))
+    dataset=dict(
+        ann_file='annotations/validation_cocoformat_subset_0.2_consec.json'))
 test_dataloader = val_dataloader
 
 # optimizer
@@ -149,7 +145,8 @@ param_scheduler = [
 ]
 
 # runtime settings
-train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=total_epochs, val_interval=interval)
+train_cfg = dict(
+    type='EpochBasedTrainLoop', max_epochs=total_epochs, val_interval=interval)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 

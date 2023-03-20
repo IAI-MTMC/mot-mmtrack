@@ -15,10 +15,7 @@ model = dict(
     detector=dict(
         # _scope_='mmdet',
         type='YOLOX',
-        backbone=dict(
-            type='CSPDarknet', 
-            deepen_factor=1, 
-            widen_factor=1),
+        backbone=dict(type='CSPDarknet', deepen_factor=1, widen_factor=1),
         neck=dict(
             type='YOLOXPAFPN',
             in_channels=[256, 512, 1024],

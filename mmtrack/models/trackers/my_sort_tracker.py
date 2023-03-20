@@ -4,7 +4,10 @@ from typing import List, Tuple
 import numpy as np
 import torch
 from mmdet.structures.bbox import bbox_overlaps
+from mmengine.dataset import Compose
 from mmengine.structures import InstanceData
+from mmpose.datasets.transforms import (GetBBoxCenterScale, LoadImage,
+                                        PackPoseInputs)
 from motmetrics.lap import linear_sum_assignment
 from torch import Tensor
 
@@ -13,10 +16,6 @@ from mmtrack.structures import TrackDataSample
 from mmtrack.structures.bbox import bbox_xyxy_to_cxcyah
 from mmtrack.utils import OptConfigType, imrenormalize
 from .base_tracker import BaseTracker
-
-from mmengine.dataset import Compose
-import numpy as np
-from mmpose.datasets.transforms import LoadImage, GetBBoxCenterScale, PackPoseInputs
 
 
 @MODELS.register_module()
@@ -450,8 +449,7 @@ class FullBodyPoseEmbedder(object):
         ]
 
     def embbed(self, landmarks):
-        """
-        Normalizes pose landmarks and converts to embedding
+        """Normalizes pose landmarks and converts to embedding.
 
         Args:
           landmarks - NumPy array with 3D landmarks of shape (N, 3).

@@ -44,7 +44,7 @@ class KalmanFilter:
 
         self.use_nsa = use_nsa
         ndim, dt = 4, 1.
-
+# cx, cy, a, h
         # Create Kalman filter model matrices.
         self._motion_mat = np.eye(2 * ndim, 2 * ndim)
         for i in range(ndim):

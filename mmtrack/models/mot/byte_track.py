@@ -115,9 +115,9 @@ class ByteTrack(BaseMultiObjectTracker):
         track_data_sample.pred_track_instances = pred_track_instances
 
         return [track_data_sample]
-    
-    def batch_predict(self, inputs: Dict[str, Tensor], data_samples: SampleList,
-                **kwargs) -> SampleList:
+
+    def batch_predict(self, inputs: Dict[str, Tensor],
+                      data_samples: SampleList, **kwargs) -> SampleList:
         """Predict results from a batch of inputs and data samples with post-
         processing.
 
@@ -144,7 +144,7 @@ class ByteTrack(BaseMultiObjectTracker):
         assert imgs.size(1) == 1, 'ByteTrack can only have 1 key frame.'
         imgs = imgs.squeeze_(1)
         det_results = self.detector.predict(imgs, data_samples)
-        
+
         for i in range(len(det_results)):
             track_data_sample = track_data_samples[i]
             det_result = det_results[i]

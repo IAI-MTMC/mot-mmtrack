@@ -213,4 +213,3 @@ val_evaluator = dict(postprocess_tracklet_cfg=[
     dict(type='InterpolateTracklets', min_num_frames=5, max_num_frames=20)
 ])
 test_evaluator = val_evaluator
-

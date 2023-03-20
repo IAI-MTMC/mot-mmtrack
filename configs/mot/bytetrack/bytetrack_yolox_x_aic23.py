@@ -1,6 +1,6 @@
 _base_ = [
     '../../_base_/models/yolox_x_8x8.py',
-    '../../_base_/datasets/aicity_challenge.py', 
+    '../../_base_/datasets/aicity_challenge.py',
     '../../_base_/default_runtime.py'
 ]
 
