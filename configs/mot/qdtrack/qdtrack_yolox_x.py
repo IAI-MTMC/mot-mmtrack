@@ -3,25 +3,21 @@ _base_ = [
     '../../_base_/datasets/aicity_challenge.py'
 ]
 
-img_scale = (640, 640)
+# img_scale = (800, 1440)
+img_scale = (640, 1152)
 strides = [8, 16, 32]
 
 model = dict(
     type='QDTrackSSTG',
-    data_preprocessor=dict(
-        _delete_=True, type='TrackDataPreprocessor', pad_size_divisor=32),
-    freeze_detector=True,
     detector=dict(
         _scope_='mmdet',
         bbox_head=dict(num_classes=1),
-        train_cfg=dict(
-            score_thr=0, nms=dict(type='nms', iou_threshold=0.7,
-                                  max_num=1000)),
+        train_cfg=dict(score_thr=0.1, nms=None),
         test_cfg=dict(score_thr=0.01, nms=dict(type='nms', iou_threshold=0.7)),
         init_cfg=dict(
             type='Pretrained',
             checkpoint=  # noqa: E251
-            'work_dirs/yolox_x_aicity/epoch_10.pth'  # noqa: E501
+            'https://download.openmmlab.com/mmdetection/v2.0/yolox/yolox_x_8x8_300e_coco/yolox_x_8x8_300e_coco_20211126_140254-1ef88d67.pth'  # noqa: E501
         )),
     track_head=dict(
         type='QuasiDenseTrackHead',
@@ -70,16 +66,14 @@ model = dict(
         init_score_thr=0.9,
         obj_score_thr=0.5,
         match_score_thr=0.5,
-        memo_tracklet_frames=120,
+        memo_tracklet_frames=90,
         memo_backdrop_frames=1,
         memo_momentum=0.8,
         nms_conf_thr=0.5,
         nms_backdrop_iou_thr=0.3,
         nms_class_iou_thr=0.7,
         with_cats=False,
-        match_metric='bisoftmax'),
-    init_cfg=dict(
-        type='Pretrained', checkpoint='work_dirs/qdtrack_yolox_x/epoch_5.pth'))
+        match_metric='bisoftmax'))
 
 # data pipeline
 train_pipeline = [
@@ -89,17 +83,14 @@ train_pipeline = [
         transforms=[
             dict(type='LoadImageFromFile'),
             dict(type='LoadTrackAnnotations', with_instance_id=True),
-            dict(type='mmdet.Resize', scale=img_scale, keep_ratio=True),
-            dict(type='mmdet.PhotoMetricDistortion')
-        ]),
-    dict(
-        type='TransformBroadcaster',
-        share_random_params=False,
-        transforms=[
             dict(
-                type='mmdet.RandomCrop',
-                crop_size=img_scale,
-                bbox_clip_border=False)
+                type='mmdet.RandomResize',
+                scale=img_scale,
+                ratio_range=(0.8, 1.2),
+                keep_ratio=True,
+                clip_object_border=False),
+            dict(type='Pad', size_divisor=32, pad_val=dict(img=(114.0, 114.0, 114.0))),
+            dict(type='mmdet.PhotoMetricDistortion')
         ]),
     dict(
         type='TransformBroadcaster',
@@ -110,15 +101,23 @@ train_pipeline = [
     dict(type='PackTrackInputs', ref_prefix='ref')
 ]
 
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadTrackAnnotations', with_instance_id=True),
+    dict(type='mmdet.Resize', scale=img_scale, keep_ratio=True),
+    dict(type='Pad', size_divisor=32, pad_val=dict(img=(114.0, 114.0, 114.0))),
+    dict(type='PackTrackInputs', pack_single_img=True),
+]
+
 # dataset settings
 train_dataloader = dict(
     dataset=dict(
         ann_file='annotations/train_cocoformat_subset_0.1_consec.json',
         pipeline=train_pipeline))
-
 val_dataloader = dict(
     dataset=dict(
-        ann_file='annotations/validation_cocoformat_subset_0.2_consec.json'))
+        ann_file='annotations/validation_cocoformat_subset_0.2_consec.json',
+        pipeline=test_pipeline))
 test_dataloader = val_dataloader
 
 # optimizer

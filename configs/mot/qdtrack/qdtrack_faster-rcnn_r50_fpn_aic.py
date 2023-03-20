@@ -3,7 +3,9 @@ _base_ = [
     '../../_base_/datasets/aicity_challenge.py',
 ]
 
-img_scale = (640, 640)
+model = dict(data_preprocessor=dict(bgr_to_rbg=False))
+
+img_scale = (1088, 1088)
 # data pipeline
 train_pipeline = [
     dict(
@@ -26,7 +28,7 @@ train_pipeline = [
         transforms=[
             dict(type='mmdet.RandomFlip', prob=0.5),
         ]),
-    dict(type='PackTrackInputs', ref_prefix='ref', num_key_frames=1),
+    dict(type='PackTrackInputs', ref_prefix='ref'),
 ]
 
 test_pipeline = [
