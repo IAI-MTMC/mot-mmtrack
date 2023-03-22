@@ -16,7 +16,7 @@ model = dict(
         test_cfg=dict(score_thr=0.1, nms=dict(type='nms', iou_threshold=0.7)),
         init_cfg=dict(
             type='Pretrained',
-            checkpoint='checkpoints/yolox_x_crowdhuman_mot17-private-half.pth')
+            checkpoint='checkpoints/yolox_x_aic.pth')
     ),
     motion=dict(type='KalmanFilter', center_only=False),
     reid=dict(
@@ -37,7 +37,7 @@ model = dict(
             match_score_thr=2.0),
         match_iou_thr=0.5,
         momentums=None,
-        num_tentatives=4,
+        num_tentatives=2,
         num_frames_retain=120))
 
 train_cfg = None

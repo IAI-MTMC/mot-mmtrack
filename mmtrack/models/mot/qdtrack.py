@@ -193,3 +193,65 @@ class QDTrack(BaseMultiObjectTracker):
         track_data_sample.pred_track_instances = pred_track_instances
 
         return [track_data_sample]
+    
+    def batch_predict(self,
+                inputs: Dict[str, Tensor],
+                data_samples: SampleList,
+                rescale: bool = True,
+                **kwargs) -> SampleList:
+        """Predict results from a batch of inputs and data samples with post-
+        processing.
+
+        Args:
+            inputs (Dict[str, Tensor]): of shape (N, T, C, H, W) encoding
+                input images. Typically these should be mean centered and std
+                scaled. The N denotes batch size.The T denotes the number of
+                key/reference frames.
+                - img (Tensor) : The key images.
+                - ref_img (Tensor): The reference images.
+            data_samples (list[:obj:`TrackDataSample`]): The batch
+                data samples. It usually includes information such
+                as `gt_instance`.
+            rescale (bool, Optional): If False, then returned bboxes and masks
+                will fit the scale of img, otherwise, returned bboxes and masks
+                will fit the scale of original image shape. Defaults to True.
+
+        Returns:
+            SampleList: Tracking results of the input images.
+            Each TrackDataSample usually contains ``pred_det_instances``
+            or ``pred_track_instances``.
+        """
+        imgs = inputs['img']
+        assert imgs.dim() == 5, 'The img must be 5D Tensor (N, T, C, H, W).'
+        assert imgs.size(1) == 1, \
+            'QDTrack can only have 1 key frame.'
+        imgs = imgs.squeeze_(1)
+        
+        track_data_samples = data_samples
+
+        x = self.detector.extract_feat(imgs)
+        rpn_results_list = self.detector.rpn_head.predict(x, data_samples)
+        det_results = self.detector.roi_head.predict(
+            x, rpn_results_list, data_samples, rescale=rescale)
+        
+        for i in range(len(data_samples)):
+            metainfo = data_samples[i].metainfo
+            frame_id = metainfo.get('frame_id', -1)
+            if frame_id == 0:
+                self.tracker.reset()
+
+            track_data_sample = track_data_samples[i]
+            track_data_sample.pred_det_instances = \
+                det_results[i].clone()
+
+            img_feats = tuple(feat[i].unsqueeze(0) for feat in x)
+            pred_track_instances = self.tracker.track(
+                model=self,
+                img=imgs[i].unsqueeze(0),
+                feats=img_feats,
+                data_sample=track_data_sample,
+                rescale=rescale,
+                **kwargs)
+            track_data_sample.pred_track_instances = pred_track_instances
+
+        return track_data_samples
