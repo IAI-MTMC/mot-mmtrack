@@ -15,9 +15,7 @@ model = dict(
         bbox_head=dict(num_classes=1),
         test_cfg=dict(score_thr=0.1, nms=dict(type='nms', iou_threshold=0.7)),
         init_cfg=dict(
-            type='Pretrained',
-            checkpoint='checkpoints/yolox_x_aic.pth')
-    ),
+            type='Pretrained', checkpoint='checkpoints/yolox_x_aic.pth')),
     motion=dict(type='KalmanFilter', center_only=False),
     reid=dict(
         type='MyReID',
@@ -38,7 +36,7 @@ model = dict(
         match_iou_thr=0.5,
         momentums=None,
         num_tentatives=2,
-        num_frames_retain=120))
+        num_frames_retain=30))
 
 train_cfg = None
 val_cfg = dict(type='ValLoop')

@@ -13,31 +13,6 @@ from mmtrack.structures import TrackDataSample
 from mmtrack.structures.bbox import bbox_xyxy_to_cxcyah
 from mmtrack.utils import OptConfigType, imrenormalize
 from .base_tracker import BaseTracker
-from mmtrack.models.motion.klt_tracker import KLTTracker
-from mmtrack.models.motion.utils import Track
-import cv2
-
-flow_cfg = {
-    "bg_feat_scale_factor": [0.1, 0.1],
-    "opt_flow_scale_factor": [0.5, 0.5],
-    "feat_density": 0.005,
-    "feat_dist_factor": 0.06,
-    "ransac_max_iter": 500,
-    "ransac_conf": 0.99,
-    "max_error": 100,
-    "inlier_thresh": 4,
-    "bg_feat_thresh": 10,
-    "obj_feat_params": {
-        "maxCorners": 1000,
-        "qualityLevel": 0.06,
-        "blockSize": 3
-    },
-    "opt_flow_params": {
-        "winSize": [5, 5],
-        "maxLevel": 5,
-        "criteria": [3, 10, 0.03]
-    }
-}
 
 
 @MODELS.register_module()
@@ -77,8 +52,6 @@ class SORTTracker(BaseTracker):
         self.reid = reid
         self.match_iou_thr = match_iou_thr
         self.num_tentatives = num_tentatives
-        # from mmtrack.utils.debug import ReIDDebugger
-        # self.reid_debugger = ReIDDebugger("reid_debug_low")
 
     @property
     def confirmed_ids(self) -> List:
@@ -158,13 +131,6 @@ class SORTTracker(BaseTracker):
         scores = data_sample.pred_det_instances.scores
 
         frame_id = metainfo.get('frame_id', -1)
-        img_np_clone = np.ascontiguousarray(img[0].cpu().moveaxis(0, -1).numpy(), dtype=np.uint8)
-        img_np = img[0].cpu().moveaxis(0, -1).numpy() # BGR
-
-        if not hasattr(self, 'motion'):
-            self.motion = KLTTracker((img_np.shape[1], img_np.shape[0]), **flow_cfg)
-            self.motion.init(img_np)
-
         if frame_id == 0:
             self.reset()
         if not hasattr(self, 'kf'):
@@ -204,17 +170,16 @@ class SORTTracker(BaseTracker):
             ids = torch.full((bboxes.size(0), ), -1,
                              dtype=torch.long).to(bboxes.device)
 
+            # motion
+            if model.with_motion:
+                self.tracks, costs = model.motion.track(
+                    self.tracks, bbox_xyxy_to_cxcyah(bboxes))
+
             active_ids = self.confirmed_ids
             if self.with_reid:
                 crops = self.crop_imgs(reid_img, metainfo, bboxes.clone(),
                                        rescale)
                 embeds = model.reid(crops, mode='tensor')
-
-                # for crop, embed in zip(crops, embeds):
-                #     reid_norm_cfg = self.reid['img_norm_cfg']
-                #     self.reid_debugger.update(frame_id, crop, reid_norm_cfg['mean'], reid_norm_cfg['std'], embed)
-                # self.reid_debugger.visualize()
-                # self.reid_debugger.clear(keep_current=True)
 
                 # reid
                 if len(active_ids) > 0:
@@ -232,10 +197,9 @@ class SORTTracker(BaseTracker):
                     cate_match = labels[None, :] == track_labels[:, None]
                     cate_cost = (1 - cate_match.int()) * 1e6
                     reid_dists = (reid_dists + cate_cost).cpu().numpy()
-                    print(reid_dists)
 
-                    # valid_inds = [list(self.ids).index(_) for _ in active_ids]
-                    # reid_dists[~np.isfinite(costs[valid_inds, :])] = np.nan
+                    valid_inds = [list(self.ids).index(_) for _ in active_ids]
+                    reid_dists[~np.isfinite(costs[valid_inds, :])] = np.nan
 
                     row, col = linear_sum_assignment(reid_dists)
                     for r, c in zip(row, col):
@@ -247,42 +211,27 @@ class SORTTracker(BaseTracker):
 
             active_ids = [
                 id for id in self.ids if id not in ids
-                # and self.tracks[id].frame_ids[-1] == frame_id - 1
+                and self.tracks[id].frame_ids[-1] == frame_id - 1
             ]
             if len(active_ids) > 0:
                 active_dets = torch.nonzero(ids == -1).squeeze(1)
+                track_bboxes = self.get('bboxes', active_ids)
+                ious = bbox_overlaps(track_bboxes, bboxes[active_dets])
 
-                motion_tracks: List[Track] = []
-                for id in active_ids:
-                    assert self.tracks[id]['last_frame'] == frame_id - 1
-                    motion_tracks.append(self.tracks[id]['motion_track'])
-                track_bboxes, homography = self.motion.predict(img_np, motion_tracks)
+                # support multi-class association
+                track_labels = torch.tensor([
+                    self.tracks[id]['labels'][-1] for id in active_ids
+                ]).to(bboxes.device)
+                cate_match = labels[None, active_dets] == track_labels[:, None]
+                cate_cost = (1 - cate_match.int()) * 1e6
 
-                active_ids = list(track_bboxes.keys())
-                if len(active_ids) > 0:
-                    for id in active_ids:
-                        self.tracks[id]['motion_track'].tlbr = track_bboxes[id]
-                        self.tracks[id]['last_frame'] = frame_id
+                dists = (1 - ious + cate_cost).cpu().numpy()
 
-                    track_bboxes = [track_bboxes[id] for id in active_ids]
-                    track_bboxes = np.stack(track_bboxes, axis=0)
-                    track_bboxes = torch.from_numpy(track_bboxes).to(bboxes)
-                    ious = bbox_overlaps(track_bboxes, bboxes[active_dets])
-
-                    # support multi-class association
-                    track_labels = torch.tensor([
-                        self.tracks[id]['labels'][-1] for id in active_ids
-                    ]).to(bboxes.device)
-                    cate_match = labels[None, active_dets] == track_labels[:, None]
-                    cate_cost = (1 - cate_match.int()) * 1e6
-
-                    dists = (1 - ious + cate_cost).cpu().numpy()
-
-                    row, col = linear_sum_assignment(dists)
-                    for r, c in zip(row, col):
-                        dist = dists[r, c]
-                        if dist < 1 - self.match_iou_thr:
-                            ids[active_dets[c]] = active_ids[r]
+                row, col = linear_sum_assignment(dists)
+                for r, c in zip(row, col):
+                    dist = dists[r, c]
+                    if dist < 1 - self.match_iou_thr:
+                        ids[active_dets[c]] = active_ids[r]
 
             new_track_inds = ids == -1
             ids[new_track_inds] = torch.arange(
@@ -298,39 +247,12 @@ class SORTTracker(BaseTracker):
             labels=labels,
             embeds=embeds if self.with_reid else None,
             frame_ids=frame_id)
-        
-        # Save the motion boxes
-        motion_bboxes = bboxes[:, :4].clone()
-        if rescale:
-            factor_x, factor_y = metainfo['scale_factor']
-            motion_bboxes = motion_bboxes * torch.tensor(
-                [factor_x, factor_y, factor_x, factor_y]).to(bboxes.device)
-
-        for id, bbox, score in zip(ids.tolist(), motion_bboxes, scores.tolist()):
-            if id in self.ids:
-                if 'motion_track' in self.tracks[id]:
-                    self.tracks[id]['motion_track'].tlbr = bbox.cpu().numpy()
-                else:
-                    self.tracks[id]['motion_track'] = Track(bbox.cpu().numpy(), score, id)
-                self.tracks[id]['last_frame'] = frame_id
 
         # update pred_track_instances
         pred_track_instances = InstanceData()
-        # pred_track_instances.bboxes = bboxes
-        # pred_track_instances.labels = labels
-        # pred_track_instances.scores = scores
-        # pred_track_instances.instances_id = ids
-        try:
-            pred_track_instances.bboxes = torch.cat((track_bboxes.to(bboxes), bboxes))
-            pred_track_instances.labels = torch.cat((torch.zeros(track_bboxes.shape[0]).to(labels), labels))
-            pred_track_instances.scores = torch.cat((torch.zeros(track_bboxes.shape[0]).to(scores), scores))
-            pred_track_instances.instances_id = torch.cat((torch.tensor(active_ids).to(ids), ids))
-        except Exception as e:
-            pred_track_instances.bboxes = bboxes
-            pred_track_instances.labels = labels
-            pred_track_instances.scores = scores
-            pred_track_instances.instances_id = ids
-            print(e)
+        pred_track_instances.bboxes = bboxes
+        pred_track_instances.labels = labels
+        pred_track_instances.scores = scores
+        pred_track_instances.instances_id = ids
 
-        cv2.imwrite(f'debug/{frame_id}.jpg', img_np_clone)
         return pred_track_instances

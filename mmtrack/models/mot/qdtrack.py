@@ -193,12 +193,12 @@ class QDTrack(BaseMultiObjectTracker):
         track_data_sample.pred_track_instances = pred_track_instances
 
         return [track_data_sample]
-    
+
     def batch_predict(self,
-                inputs: Dict[str, Tensor],
-                data_samples: SampleList,
-                rescale: bool = True,
-                **kwargs) -> SampleList:
+                      inputs: Dict[str, Tensor],
+                      data_samples: SampleList,
+                      rescale: bool = True,
+                      **kwargs) -> SampleList:
         """Predict results from a batch of inputs and data samples with post-
         processing.
 
@@ -226,14 +226,14 @@ class QDTrack(BaseMultiObjectTracker):
         assert imgs.size(1) == 1, \
             'QDTrack can only have 1 key frame.'
         imgs = imgs.squeeze_(1)
-        
+
         track_data_samples = data_samples
 
         x = self.detector.extract_feat(imgs)
         rpn_results_list = self.detector.rpn_head.predict(x, data_samples)
         det_results = self.detector.roi_head.predict(
             x, rpn_results_list, data_samples, rescale=rescale)
-        
+
         for i in range(len(data_samples)):
             metainfo = data_samples[i].metainfo
             frame_id = metainfo.get('frame_id', -1)

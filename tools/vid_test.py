@@ -126,14 +126,9 @@ def main(args):
     os.makedirs(args.output_dir)
 
     model = init_model(cfg, args.checkpoint, device=args.device)
-    # We save the model as a state_dict,
-    # so we can load it back to the model when test new videos
-    model_state_dict = model.state_dict()
 
     for vid_name in os.scandir(args.input_dir):
         if vid_name.is_file() and vid_name.name.endswith('.mp4'):
-            model.load_state_dict(model_state_dict)
-
             print(f'Testing {vid_name.name} ...')
             # results = test_once(model, osp.join(args.input_dir, vid_name.name), test_pipeline)
             results = batch_test(
