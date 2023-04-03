@@ -86,8 +86,9 @@ def main(args):
     import cv2
 
     if OUT_VIDEO:
+        height, width = outputs[0].metainfo['ori_shape']
         vwriter = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'mp4v'),
-                                  fps, (1920, 1080))
+                                  fps, (width, height))
     for result in outputs:
         frame_id = result.metainfo['frame_id']
         out_img = draw_tracked_instances(imgs[frame_id], result)

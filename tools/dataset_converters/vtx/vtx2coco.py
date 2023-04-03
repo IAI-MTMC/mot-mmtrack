@@ -7,7 +7,6 @@ from warnings import warn
 
 import mmcv
 import mmengine
-from tqdm import tqdm
 
 CLASSES = [dict(id=1, name='person')]
 
@@ -52,7 +51,6 @@ def main(args):
         sets = ['vtx']
 
     vid_id, img_id, ann_id = 1, 1, 1
-    ins_maps = dict()
 
     for subset in sets:
         ins_id = 0
@@ -68,6 +66,8 @@ def main(args):
         for scene_dir in os.scandir(data_dir):
             if not scene_dir.is_dir():
                 warn(f'Unexpected file in data directory: {scene_dir.name}')
+                continue
+            if scene_dir.name in ('annotations', 'extracted_images'):
                 continue
 
             # Retrieve annotation directory for this scene
@@ -91,6 +91,7 @@ def main(args):
                         f'Unexpected file in annotation directory: {duration_dir.name}'
                     )
                     continue
+                ins_maps = dict() # Instance ID is independent for each duration
 
                 for camera_gt_dir in os.scandir(duration_dir.path):
                     if not camera_gt_dir.is_dir():
@@ -104,8 +105,7 @@ def main(args):
                                           camera_gt_dir.name)
                     gt_file = osp.join(camera_gt_dir.path, 'gt', 'gt.txt')
                     imgs_dir = osp.join(imgs_root_dir, video_name)
-                    img_names = sorted(os.listdir(imgs_dir))
-                    ins_maps = dict()
+                    img_names = sorted([img_name for img_name in os.listdir(imgs_dir) if img_name.endswith('.jpg')])
 
                     height, width = mmcv.imread(
                         osp.join(imgs_dir, '000001.jpg')).shape[:2]
@@ -128,12 +128,11 @@ def main(args):
                             )
 
                     for frame_id, name in enumerate(img_names):
-                        img_name = osp.join(imgs_dir, name)
-                        mot_frame_id = osp.splitext(name)[0]
+                        img_name = osp.join(video_name, name)
+                        mot_frame_id = int(osp.splitext(name)[0])
 
                         image = dict(
                             id=img_id,
-                            video_id=vid_id,
                             file_name=img_name,
                             height=height,
                             width=width,
