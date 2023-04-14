@@ -129,3 +129,6 @@ demo/debug_mot.py
 
 # Demo Outputs
 outputs/
+
+checkpoints/
+

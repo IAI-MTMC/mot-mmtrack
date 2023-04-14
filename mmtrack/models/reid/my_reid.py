@@ -52,12 +52,75 @@ class MyReID(BaseModel):
     def head(self):
 
         class Head:
-            out_channels = self.reid.model.feature_dim
+            out_channels = self.model.feature_dim
 
         return Head()
 
-    def forward(self, inputs, mode: str = 'tensor'):
-        assert mode == 'tensor', "Only support tensor mode"
+    def forward(self, inputs, mode: str = 'tensor', frame_id=-1):
+        import cv2
+        import numpy as np
 
-        outs = self.model(inputs)
-        return outs
+        mean = np.array([[[123.675, 116.28, 103.53]]])
+        std = np.array([[[58.395, 57.12, 57.375]]])
+
+        for i, img in enumerate(inputs):
+            img = img.detach().moveaxis(0, -1).cpu().numpy()
+            img = img * std + mean
+            img_path = 'images/image_' + str(frame_id) + '_' + str(i) + '.jpg'
+            cv2.imwrite(img_path, img[..., ::-1])
+
+        print('crop images: ', inputs.shape)
+
+        # self.test_reid()
+        assert mode == 'tensor', "Only support tensor mode"
+        # print(inputs.max(), inputs.min())
+        features = self.model(inputs)
+        # print(features.min(), features.max())
+        # print(features[0])
+
+        # import torch
+        # print(torch.cdist(features, features))
+        return features
+
+    def test_reid(self):
+        print('------------ test -----------')
+        import torch
+        import glob
+        import cv2
+        from torchvision.transforms import Resize, Compose, ToTensor, Normalize
+
+        transform = Compose([
+            ToTensor(),
+            Resize((256, 128)),
+            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        images = []
+
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 1, 3)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(1, 1, 3)
+        images_path = glob.glob('../reid/data/*')
+        images_path.sort()
+        for image_path in images_path:
+            image = cv2.imread(image_path)
+            image = image[..., ::-1]
+            image = transform(image.copy())
+
+            print(image.min(), image.max())
+            images.append(image)
+            print(image_path)
+            img = image.clone().moveaxis(0, -1)
+            img = (img * std + mean) * 255
+            img = img.numpy()
+            img = img[..., ::-1]
+            cv2.imwrite(image_path.split('/')[-1], img)
+
+        images = torch.stack(images, dim=0)
+        images = images.cuda()
+        print(images.shape)
+        features = self.model(images)
+        print(features.min(), features.max())
+        print(features.shape)
+
+        print(torch.cdist(features, features))
+
+        print('------------ test -----------')
