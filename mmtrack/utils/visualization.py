@@ -59,6 +59,6 @@ def draw_tracked_instances(image: np.ndarray,
                       (box[0] + text_w + text_padding, box[1] + text_padding),
                       color, -1)
         cv2.putText(image, label, (box[0], box[1]), font, font_scale,
-                    (255, 255, 255), font_thickness)
+                    (255, 255, 255), font_thickness, cv2.LINE_AA)
 
     return image

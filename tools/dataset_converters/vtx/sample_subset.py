@@ -1,8 +1,10 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import os.path as osp
 from argparse import ArgumentParser
 from pathlib import Path
 
 import mmengine
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -11,8 +13,9 @@ def parse_args():
         '--ratio',
         type=float,
         help='The ratio of the subset size to the dataset size.')
-    
+
     return parser.parse_args()
+
 
 def _group_images_by_video(images):
     """Group the images by video.
@@ -31,6 +34,7 @@ def _group_images_by_video(images):
         images_by_video[video_id].append(img)
     return images_by_video
 
+
 def _group_annotations_by_image(annotations):
     """Group the annotations by image.
 
@@ -47,6 +51,7 @@ def _group_annotations_by_image(annotations):
             annotations_by_image[image_id] = []
         annotations_by_image[image_id].append(ann)
     return annotations_by_image
+
 
 def main(args):
     annotation_path = Path(args.annotation_path)
@@ -66,7 +71,8 @@ def main(args):
         subset_images.extend(images_by_video[video['id']])
     annotations['images'] = subset_images
 
-    annotations_by_image = _group_annotations_by_image(annotations['annotations'])
+    annotations_by_image = _group_annotations_by_image(
+        annotations['annotations'])
     subset_annotations = []
     for image in subset_images:
         image_id = image['id']
@@ -78,6 +84,7 @@ def main(args):
     mmengine.dump(
         annotations,
         annotation_path.parent / f'{ann_name}_subset_{args.ratio}.json')
+
 
 if __name__ == '__main__':
     main(parse_args())

@@ -206,7 +206,7 @@ class FullBodyPoseEmbedder(object):
         """Converts pose landmarks into 3D embedding.
 
         We use several pairwise 3D distances to form pose embedding. All distances
-        include X and Y components with sign. We differnt types of pairs to cover
+        include X and Y components with sign. We different types of pairs to cover
         different pose classes. Feel free to remove some or add new.
 
         Args:

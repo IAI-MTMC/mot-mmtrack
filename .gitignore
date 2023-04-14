@@ -122,6 +122,7 @@ mmtrack/.mim
 *.pth
 *.py~
 *.sh~
+*.pth.tar*
 
 # Debug
 demo/demo.sh

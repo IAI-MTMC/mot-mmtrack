@@ -41,6 +41,7 @@ model = dict(
         bgr_to_rgb=True),
     detector=dict(
         type='YOLODetector',
+        _scope_='mmyolo',
         backbone=dict(
             type='YOLOv8CSPDarknet',
             arch='P5',

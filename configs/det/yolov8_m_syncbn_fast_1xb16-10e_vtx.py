@@ -74,7 +74,6 @@ affine_scale = 0.9  # YOLOv5RandomAffine scaling ratio
 mixup_prob = 0.1
 copypaste_prob = 0.1
 min_area_ratio = 0.01  # YOLOv5RandomAffine minimum area ratio
-use_mask2refine = True
 # YOLOv5RandomAffine aspect ratio of width and height thres to filter bboxes
 max_aspect_ratio = 100
 tal_topk = 10  # Number of bbox selected in each level
@@ -163,7 +162,12 @@ model = dict(
             alpha=tal_alpha,
             beta=tal_beta,
             eps=1e-9)),
-    test_cfg=model_test_cfg)
+    test_cfg=model_test_cfg,
+    init_cfg=dict(
+        type='Pretrained',
+        checkpoint=
+        'https://download.openmmlab.com/mmyolo/v0/yolov8/yolov8_m_syncbn_fast_8xb16-500e_coco/yolov8_m_syncbn_fast_8xb16-500e_coco_20230115_192200-c22e560a.pth'
+    ))
 
 albu_train_transforms = [
     dict(type='Blur', p=0.01),
@@ -174,11 +178,7 @@ albu_train_transforms = [
 
 pre_transform = [
     dict(type='LoadImageFromFile', file_client_args=_base_.file_client_args),
-    dict(
-        type='LoadAnnotations',
-        with_bbox=True,
-        with_mask=True,
-        mask2bbox=use_mask2refine)
+    dict(type='LoadAnnotations', with_bbox=True)
 ]
 
 mosaic_affine_transform = [
@@ -187,23 +187,18 @@ mosaic_affine_transform = [
         img_scale=img_scale,
         pad_val=114.0,
         pre_transform=pre_transform),
-    dict(type='YOLOv5CopyPaste', prob=copypaste_prob),
     dict(
         type='YOLOv5RandomAffine',
         max_rotate_degree=0.0,
         max_shear_degree=0.0,
-        max_aspect_ratio=100.,
+        max_aspect_ratio=100,
         scaling_ratio_range=(1 - affine_scale, 1 + affine_scale),
         # img_scale is (width, height)
         border=(-img_scale[0] // 2, -img_scale[1] // 2),
-        border_val=(114, 114, 114),
-        min_area_ratio=min_area_ratio,
-        use_mask_refine=use_mask2refine)
+        border_val=(114, 114, 114))
 ]
 
 last_transform = [
-    # Delete gt_masks to avoid more computation
-    dict(type='RemoveDataElement', keys=['gt_masks']),
     dict(
         type='mmdet.Albu',
         transforms=albu_train_transforms,
@@ -223,6 +218,7 @@ last_transform = [
                    'flip_direction'))
 ]
 
+# enable mixup
 train_pipeline = [
     *pre_transform, *mosaic_affine_transform,
     dict(
@@ -245,10 +241,8 @@ train_pipeline_stage2 = [
         max_rotate_degree=0.0,
         max_shear_degree=0.0,
         scaling_ratio_range=(1 - affine_scale, 1 + affine_scale),
-        max_aspect_ratio=max_aspect_ratio,
-        border_val=(114, 114, 114),
-        min_area_ratio=min_area_ratio,
-        use_mask_refine=use_mask2refine), *last_transform
+        max_aspect_ratio=100,
+        border_val=(114, 114, 114)), *last_transform
 ]
 
 train_dataloader = dict(

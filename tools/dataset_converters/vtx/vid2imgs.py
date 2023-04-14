@@ -53,6 +53,9 @@ def main(args):
         if not scene_dir.is_dir():
             warn(f'Skipping file: {scene_dir.name}')
             continue
+        if scene_dir.name in ('extracted_images', 'annotations',
+                              '.ipynb_checkpoints'):
+            continue
 
         vids_dir = os.path.join(scene_dir.path, 'videos')
         for duration_dir in os.scandir(vids_dir):
