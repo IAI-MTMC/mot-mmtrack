@@ -8,17 +8,14 @@ model = dict(
         batch_augments=[
             dict(
                 type='mmdet.BatchSyncRandomResize',
-                random_size_range=(480, 800),
+                random_size_range=(320, 640),
                 size_divisor=32,
                 interval=10)
         ]),
     detector=dict(
         # _scope_='mmdet',
         type='YOLOX',
-        backbone=dict(
-            type='CSPDarknet', 
-            deepen_factor=1.0, 
-            widen_factor=1.0),
+        backbone=dict(type='CSPDarknet', deepen_factor=1, widen_factor=1),
         neck=dict(
             type='YOLOXPAFPN',
             in_channels=[256, 512, 1024],

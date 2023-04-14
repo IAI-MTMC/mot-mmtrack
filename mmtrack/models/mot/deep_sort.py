@@ -114,10 +114,10 @@ class DeepSORT(BaseMultiObjectTracker):
         return [track_data_sample]
 
     def batch_predict(self,
-                    inputs: Dict[str, Tensor],
-                    data_samples: SampleList,
-                    rescale: bool = True,
-                    **kwargs) -> SampleList:
+                      inputs: Dict[str, Tensor],
+                      data_samples: SampleList,
+                      rescale: bool = True,
+                      **kwargs) -> SampleList:
         """Predict results from a batch of inputs and data samples with post-
         processing.
 
@@ -150,7 +150,7 @@ class DeepSORT(BaseMultiObjectTracker):
         track_data_samples = data_samples
 
         det_results = self.detector.predict(imgs, data_samples)
-        
+
         for i in range(len(data_samples)):
             track_data_samples[i].pred_det_instances = det_results[
                 i].pred_instances.clone()

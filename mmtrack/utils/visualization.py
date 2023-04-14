@@ -1,8 +1,10 @@
+# Copyright (c) OpenMMLab. All rights reserved.
+import cv2
 import numpy as np
 import seaborn as sns
-import cv2
 
 from mmtrack.structures import TrackDataSample
+
 
 def _random_color(seed):
     """Random a color according to the input seed."""
@@ -12,16 +14,16 @@ def _random_color(seed):
     color = tuple([int(255 * c) for c in color])
     return color
 
-def draw_tracked_instances(
-    image: np.ndarray, 
-    track_sample: TrackDataSample,
-    thickness: int = 2):
+
+def draw_tracked_instances(image: np.ndarray,
+                           track_sample: TrackDataSample,
+                           thickness: int = 2):
     """
     Args:
         image (np.ndarray): The image to draw on.
         track_sample (TrackDataSample): The track sample to draw.
         thickness (int): The thickness of the lines.
-    
+
     Returns:
         np.ndarray: The image with drawn track instances.
     """
@@ -39,18 +41,24 @@ def draw_tracked_instances(
     for track_id, track_score in zip(pred_track_instances.instances_id,
                                      pred_track_instances.scores):
         labels.append(f'{track_id}-{track_score:.02f}')
-    
-    colors = [_random_color(track_id) for track_id in pred_track_instances.instances_id]
+
+    colors = [
+        _random_color(track_id)
+        for track_id in pred_track_instances.instances_id
+    ]
 
     for box, label, color in zip(boxes, labels, colors):
         box = box.round().int().tolist()
-        cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), color, thickness)
+        cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), color,
+                      thickness)
 
-        (text_w, text_h), _ = cv2.getTextSize(label, font, font_scale, font_thickness)
-        cv2.rectangle(image, 
-                    (box[0] - text_padding, box[1] - text_h - text_padding), 
-                    (box[0] + text_w + text_padding, box[1] + text_padding), 
-                    color, -1)
-        cv2.putText(image, label, (box[0], box[1]), font, font_scale, (255, 255, 255), font_thickness)
+        (text_w, text_h), _ = cv2.getTextSize(label, font, font_scale,
+                                              font_thickness)
+        cv2.rectangle(image,
+                      (box[0] - text_padding, box[1] - text_h - text_padding),
+                      (box[0] + text_w + text_padding, box[1] + text_padding),
+                      color, -1)
+        cv2.putText(image, label, (box[0], box[1]), font, font_scale,
+                    (255, 255, 255), font_thickness, cv2.LINE_AA)
 
     return image

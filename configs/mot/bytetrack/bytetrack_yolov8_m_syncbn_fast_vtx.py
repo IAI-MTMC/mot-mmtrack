@@ -1,21 +1,17 @@
 _base_ = [
-    '../../_base_/models/yolox_x_8x8.py',
-    '../../_base_/datasets/aicity_challenge.py',
+    '../../_base_/models/yolov8_m_syncbn_fast.py',
     '../../_base_/default_runtime.py'
 ]
 
-img_scale = (640, 640)
+img_scale = (640, 480)
 
 model = dict(
     type='ByteTrack',
     detector=dict(
-        _scope_='mmdet',
-        bbox_head=dict(num_classes=1),
-        test_cfg=dict(score_thr=0.5, nms=dict(type='nms', iou_threshold=0.7)),
+        bbox_head=dict(head_module=dict(num_classes=1)),
         init_cfg=dict(
             type='Pretrained',
-            checkpoint='checkpoints/epoch_10.pth'  # noqa: E501
-        )),
+            checkpoint='checkpoints/yolov8_m_syncbn_fast_1xb64_vtx.pth')),
     motion=dict(type='KalmanFilter'),
     tracker=dict(
         type='ByteTracker',
@@ -36,20 +32,19 @@ test_pipeline = [
     dict(type='PackTrackInputs', pack_single_img=True)
 ]
 
-train_dataloader = None
 val_dataloader = dict(
+    batch_size=1,
+    num_workers=2,
+    persistent_workers=True,
+    drop_last=False,
+    sampler=dict(type='VideoSampler'),
     dataset=dict(
-        filter_cfg=dict(filter_empty_gt=True, min_size=32),
-        ann_file='annotations/validation_cocoformat_subset_0.2_consec.json',
+        # type=dataset_type,
+        # data_root=data_root,
+        ann_file='annotations/half-val_cocoformat.json',
+        data_prefix=dict(img_path='train'),
+        ref_img_sampler=None,
+        load_as_video=True,
+        test_mode=True,
         pipeline=test_pipeline))
 test_dataloader = val_dataloader
-
-# evaluator
-val_evaluator = dict(postprocess_tracklet_cfg=[
-    dict(type='InterpolateTracklets', min_num_frames=5, max_num_frames=20)
-])
-test_evaluator = val_evaluator
-
-train_cfg = None
-val_cfg = dict(type='ValLoop')
-test_cfg = dict(type='TestLoop')

@@ -5,10 +5,8 @@ from argparse import ArgumentParser
 
 import mmcv
 import mmengine
-from mmengine.dataset import Compose, default_collate
 
-from mmtrack.apis import init_model, batch_inference_mot
-from mmtrack.registry import VISUALIZERS
+from mmtrack.apis import batch_inference_mot, init_model
 from mmtrack.utils import register_all_modules
 from mmtrack.utils.visualization import draw_tracked_instances
 
@@ -26,6 +24,7 @@ def parse_args():
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     args = parser.parse_args()
     return args
+
 
 def main(args):
     assert args.output
@@ -45,11 +44,6 @@ def main(args):
     if args.output is not None:
         if args.output.endswith('.mp4'):
             OUT_VIDEO = True
-            out_dir = tempfile.TemporaryDirectory()
-            out_path = out_dir.name
-            _out = args.output.rsplit(os.sep, 1)
-            if len(_out) > 1:
-                os.makedirs(_out[0], exist_ok=True)
         else:
             out_path = args.output
             os.makedirs(out_path, exist_ok=True)
@@ -70,6 +64,7 @@ def main(args):
     prog_bar = mmengine.ProgressBar(len(imgs))
     # test and show/save the images
     frame_id_cnt = 0
+    outputs = []
     while frame_id_cnt < len(imgs):
         batched_imgs = []
         batch_frame_ids = []
@@ -81,29 +76,29 @@ def main(args):
             batched_imgs.append(imgs[frame_id_cnt])
             batch_frame_ids.append(frame_id_cnt)
             frame_id_cnt += 1
-        
+
         results = batch_inference_mot(model, batched_imgs, batch_frame_ids)
+        outputs.extend(results)
 
-        for result in results:
-            frame_id = result.metainfo['frame_id']
-
-            if args.output is not None:
-                if IN_VIDEO or OUT_VIDEO:
-                    out_file = osp.join(out_path, f'{frame_id:06d}.jpg')
-                else:
-                    out_file = osp.join(out_path, imgs[frame_id].rsplit(os.sep, 1)[-1])
-            else:
-                out_file = None
-            
-            out_img = draw_tracked_instances(imgs[frame_id], result)
-            mmcv.imwrite(out_img, out_file)
-        
         prog_bar.update(len(results))
 
-    if args.output and OUT_VIDEO:
-        print(f'making the output video at {args.output} with a FPS of {fps}')
-        mmcv.frames2video(out_path, args.output, fps=fps, fourcc='mp4v')
-        out_dir.cleanup()
+    print(f'\nmaking the output video at {args.output} with a FPS of {fps}')
+    import cv2
+
+    if OUT_VIDEO:
+        height, width = outputs[0].metainfo['ori_shape']
+        vwriter = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'mp4v'),
+                                  fps, (width, height))
+    for result in outputs:
+        frame_id = result.metainfo['frame_id']
+        out_img = draw_tracked_instances(imgs[frame_id], result)
+
+        if OUT_VIDEO:
+            vwriter.write(out_img)
+        else:
+            mmcv.imwrite(out_img, osp.join(out_path, f'{frame_id:06d}.jpg'))
+    if OUT_VIDEO:
+        vwriter.release()
 
 
 if __name__ == '__main__':

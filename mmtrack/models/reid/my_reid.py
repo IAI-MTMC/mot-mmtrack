@@ -1,9 +1,9 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 from mmengine.model import BaseModel
+from torchreid.reid.models.osnet import OSBlock, OSNet, init_pretrained_weights
+from torchreid.reid.utils import check_isfile, load_pretrained_weights
 
 from mmtrack.registry import MODELS
-
-from torchreid.reid.models.osnet import OSNet, init_pretrained_weights, OSBlock
-from torchreid.reid.utils import (check_isfile, load_pretrained_weights)
 
 
 def osnet_x1_0(num_classes=1000,

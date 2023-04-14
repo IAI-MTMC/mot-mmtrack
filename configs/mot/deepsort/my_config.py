@@ -55,10 +55,21 @@ test_pipeline = [
     dict(type="PackTrackInputs", pack_single_img=True),
 ]
 
-train_dataloader = None
-val_dataloader = dict(dataset=dict(pipeline=test_pipeline))
+# dataloader
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=2,
+    persistent_workers=True,
+    drop_last=False,
+    sampler=dict(type='VideoSampler'),
+    dataset=dict(
+        type=dataset_type,
+        data_root=data_root,
+        ann_file='annotations/validation_cocoformat_subset_0.2_consec.json',
+        data_prefix=dict(img_path='validation'),
+        metainfo=dict(CLASSES=('person', )),
+        ref_img_sampler=None,
+        load_as_video=True,
+        test_mode=True,
+        pipeline=test_pipeline))
 test_dataloader = val_dataloader
-
-train_cfg = None
-val_cfg = dict(type='ValLoop')
-test_cfg = dict(type='TestLoop')

@@ -10,9 +10,11 @@ from mmtrack.structures import TrackDataSample
 from mmtrack.utils import OptConfigType, OptMultiConfig, SampleList
 from .base import BaseMultiObjectTracker
 
+
 @MODELS.register_module()
 class QDTrackSSTG(BaseMultiObjectTracker):
-    """Quasi-Dense Similarity Learning Single Stage for Multiple Object Tracking.
+    """Quasi-Dense Similarity Learning Single Stage for Multiple Object
+    Tracking.
 
     This multi object tracker is the implementation of `QDTrack
     <https://arxiv.org/abs/2006.06664>`_.
@@ -106,8 +108,8 @@ class QDTrackSSTG(BaseMultiObjectTracker):
                     img_shape=data_sample.metainfo['ref_img_shape'],
                     scale_factor=data_sample.metainfo['ref_scale_factor']))
             ref_data_samples.append(ref_data_sample)
-        
-        # Since mmdet does not support predict with custom test_cfg, 
+
+        # Since mmdet does not support predict with custom test_cfg,
         # we need to change the test_cfg of bbox_head temporarily.
         backup_cfg = self.detector.bbox_head.test_cfg
         self.detector.bbox_head.test_cfg = self.detector.train_cfg
@@ -163,7 +165,8 @@ class QDTrackSSTG(BaseMultiObjectTracker):
             self.tracker.reset()
 
         x = self.detector.extract_feat(img)
-        det_results = self.detector.bbox_head.predict(x, data_samples, rescale=rescale)
+        det_results = self.detector.bbox_head.predict(
+            x, data_samples, rescale=rescale)
 
         track_data_sample = data_samples[0]
         track_data_sample.pred_det_instances = \
@@ -181,10 +184,10 @@ class QDTrackSSTG(BaseMultiObjectTracker):
         return [track_data_sample]
 
     def batch_predict(self,
-                inputs: Dict[str, Tensor],
-                data_samples: SampleList,
-                rescale: bool = True,
-                **kwargs) -> SampleList:
+                      inputs: Dict[str, Tensor],
+                      data_samples: SampleList,
+                      rescale: bool = True,
+                      **kwargs) -> SampleList:
         """Predict results from a batch of inputs and data samples with post-
         processing.
 
@@ -216,7 +219,8 @@ class QDTrackSSTG(BaseMultiObjectTracker):
         track_data_samples = data_samples
 
         x = self.detector.extract_feat(imgs)
-        det_results = self.detector.bbox_head.predict(x, data_samples, rescale=rescale)
+        det_results = self.detector.bbox_head.predict(
+            x, data_samples, rescale=rescale)
         # import pdb; pdb.set_trace()
         for i in range(len(data_samples)):
             metainfo = data_samples[i].metainfo
@@ -227,7 +231,7 @@ class QDTrackSSTG(BaseMultiObjectTracker):
             track_data_sample = track_data_samples[i]
             track_data_sample.pred_det_instances = \
                 det_results[i].clone()
-            
+
             img_feats = tuple(feat[i].unsqueeze(0) for feat in x)
             pred_track_instances = self.tracker.track(
                 model=self,

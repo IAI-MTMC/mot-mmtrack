@@ -1,11 +1,15 @@
-from typing import Optional, List
-from mmtrack.registry import MODELS
-from mmtrack.structures import ReIDDataSample
-from mmengine.model import BaseModel
+# Copyright (c) OpenMMLab. All rights reserved.
+from typing import List, Optional
+
+import numpy as np
 import torch
 from mmengine.dataset import Compose
-import numpy as np
-from mmpose.datasets.transforms import LoadImage, GetBBoxCenterScale, PackPoseInputs
+from mmengine.model import BaseModel
+from mmpose.datasets.transforms import (GetBBoxCenterScale, LoadImage,
+                                        PackPoseInputs)
+
+from mmtrack.registry import MODELS
+from mmtrack.structures import ReIDDataSample
 
 
 @MODELS.register_module()
@@ -103,8 +107,7 @@ class FullBodyPoseEmbedder(object):
         ]
 
     def embbed(self, landmarks):
-        """
-        Normalizes pose landmarks and converts to embedding
+        """Normalizes pose landmarks and converts to embedding.
 
         Args:
           landmarks - NumPy array with 3D landmarks of shape (N, 3).
@@ -203,7 +206,7 @@ class FullBodyPoseEmbedder(object):
         """Converts pose landmarks into 3D embedding.
 
         We use several pairwise 3D distances to form pose embedding. All distances
-        include X and Y components with sign. We differnt types of pairs to cover
+        include X and Y components with sign. We different types of pairs to cover
         different pose classes. Feel free to remove some or add new.
 
         Args:

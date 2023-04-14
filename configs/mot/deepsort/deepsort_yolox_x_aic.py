@@ -63,10 +63,10 @@ val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
 test_pipeline = [
-    dict(type="LoadImageFromFile"),
-    dict(type="LoadTrackAnnotations", with_instance_id=True),
-    dict(type="mmdet.Resize", scale=img_scale, keep_ratio=True),
-    dict(type="PackTrackInputs", pack_single_img=True),
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadTrackAnnotations', with_instance_id=True),
+    dict(type='mmdet.Resize', scale=img_scale, keep_ratio=True),
+    dict(type='PackTrackInputs', pack_single_img=True),
 ]
 
 train_dataloader = None

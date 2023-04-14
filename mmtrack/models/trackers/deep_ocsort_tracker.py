@@ -4,7 +4,6 @@ from typing import List
 import lap
 import numpy as np
 import torch
-from addict import Dict
 from mmdet.structures.bbox import bbox_overlaps
 from mmengine.structures import InstanceData
 from torch import Tensor
@@ -13,144 +12,93 @@ from mmtrack.registry import MODELS
 from mmtrack.structures import TrackDataSample
 from mmtrack.structures.bbox import bbox_cxcyah_to_xyxy, bbox_xyxy_to_cxcyah
 from mmtrack.utils import OptConfigType
-from .sort_tracker import SORTTracker
+from mmtrack.utils.image import imrenormalize
+from .ocsort_tracker import OCSORTTracker
 
 
 @MODELS.register_module()
-class OCSORTTracker(SORTTracker):
-    """Tracker for OC-SORT.
-
-    Args:
-        obj_score_thrs (float): Detection score threshold for matching objects.
-            Defaults to 0.3.
-        init_track_thr (float): Detection score threshold for initializing a
-            new tracklet. Defaults to 0.7.
-        weight_iou_with_det_scores (bool): Whether using detection scores to
-            weight IOU which is used for matching. Defaults to True.
-        match_iou_thr (float): IOU distance threshold for matching between two
-            frames. Defaults to 0.3.
-        num_tentatives (int, optional): Number of continuous frames to confirm
-            a track. Defaults to 3.
-        vel_consist_weight (float): Weight of the velocity consistency term in
-            association (OCM term in the paper).
-        vel_delta_t (int): The difference of time step for calculating of the
-            velocity direction of tracklets.
-        init_cfg (dict or list[dict], optional): Initialization config dict.
-            Defaults to None.
-    """
+class DeepOCSORTTracker(OCSORTTracker):
+    """DeepOCSORTTracker."""
 
     def __init__(self,
-                 obj_score_thr: float = 0.3,
-                 init_track_thr: float = 0.7,
-                 weight_iou_with_det_scores=True,
-                 match_iou_thr=0.3,
-                 num_tentatives=3,
-                 vel_consist_weight=0.2,
-                 vel_delta_t=3,
+                 det_momentum_thr: float = 0.8,
+                 embed_momentum_factor: float = 0.95,
+                 embed_weight: float = 0.75,
+                 embed_dist_diff_thr: float = 0.5,
                  **kwargs):
         super().__init__(**kwargs)
-        self.obj_score_thr = obj_score_thr
-        self.init_track_thr = init_track_thr
+        self.det_momentum_thr = det_momentum_thr
 
-        self.weight_iou_with_det_scores = weight_iou_with_det_scores
-        self.match_iou_thr = match_iou_thr
-        self.vel_consist_weight = vel_consist_weight
-        self.vel_delta_t = vel_delta_t
-
-        self.num_tentatives = num_tentatives
-
-    @property
-    def unconfirmed_ids(self):
-        """Unconfirmed ids in the tracker."""
-        ids = [id for id, track in self.tracks.items() if track.tentative]
-        return ids
+        assert self.momentums is None, 'DeepOCSORT does not support momentums.'
+        self.embed_momentum_factor = embed_momentum_factor
+        self.w_assoc_embed = embed_weight
+        self.max_diff = embed_dist_diff_thr
 
     def init_track(self, id, obj):
         """Initialize a track."""
         super().init_track(id, obj)
-        if self.tracks[id].frame_ids[-1] == 0:
-            self.tracks[id].tentative = False
-        else:
-            self.tracks[id].tentative = True
-        # bbox = bbox_xyxy_to_cxcyah(self.tracks[id].bboxes[-1])  # size = (1, 4)
-        # assert bbox.ndim == 2 and bbox.shape[0] == 1
-        # bbox = bbox.squeeze(0).cpu().numpy()
-        # self.tracks[id].mean, self.tracks[id].covariance = self.kf.initiate(
-        #     bbox)
-        # track.obs maintains the history associated detections to this track
-        self.tracks[id].obs = []
-        bbox_id = self.memo_items.index('bboxes')
-        self.tracks[id].obs.append(obj[bbox_id])
-        # a placefolder to save mean/covariance before losing tracking it
-        # parameters to save: mean, covariance, measurement
-        self.tracks[id].tracked = True
-        self.tracks[id].saved_attr = Dict()
-        self.tracks[id].velocity = torch.tensor(
-            (-1, -1)).to(obj[bbox_id].device)  # placeholder
+
+        if self.with_reid:
+            self.tracks[id].embed_momentum = self.tracks[id]['embeds'][0]
 
     def update_track(self, id, obj):
         """Update a track."""
+        prev_mean, prev_cov = self.tracks[id].mean, self.tracks[id].covariance
         super().update_track(id, obj)
-        # if self.tracks[id].tentative:
-        #     if len(self.tracks[id]['bboxes']) >= self.num_tentatives:
-        #         self.tracks[id].tentative = False
-        # bbox = bbox_xyxy_to_cxcyah(self.tracks[id].bboxes[-1])  # size = (1, 4)
-        # assert bbox.ndim == 2 and bbox.shape[0] == 1
-        # bbox = bbox.squeeze(0).cpu().numpy()
-        # self.tracks[id].mean, self.tracks[id].covariance = self.kf.update(
-        #     self.tracks[id].mean, self.tracks[id].covariance, bbox)
-        self.tracks[id].tracked = True
-        bbox_id = self.memo_items.index('bboxes')
-        self.tracks[id].obs.append(obj[bbox_id])
 
-        bbox1 = self.k_step_observation(self.tracks[id])
-        bbox2 = obj[bbox_id]
-        self.tracks[id].velocity = self.vel_direction(bbox1, bbox2).to(
-            obj[bbox_id].device)
+        ema_factor = 0.9
+        self.tracks[id].mean = prev_mean * ema_factor + self.tracks[
+            id].mean * (1 - ema_factor)
+        self.tracks[id].covariance = prev_cov * ema_factor + self.tracks[
+            id].covariance * (1 - ema_factor)
 
-    def vel_direction(self, bbox1, bbox2):
-        """Estimate the direction vector between two boxes."""
-        if bbox1.sum() < 0 or bbox2.sum() < 0:
-            return torch.tensor((-1, -1))
-        cx1, cy1 = (bbox1[0] + bbox1[2]) / 2.0, (bbox1[1] + bbox1[3]) / 2.0
-        cx2, cy2 = (bbox2[0] + bbox2[2]) / 2.0, (bbox2[1] + bbox2[3]) / 2.0
-        speed = torch.tensor([cy2 - cy1, cx2 - cx1])
-        norm = torch.sqrt((speed[0])**2 + (speed[1])**2) + 1e-6
-        return speed / norm
+        if self.with_reid:
+            # update momentum factor of embeds
+            obj_score = self.tracks[id]['scores'][-1]
+            det_conf = 1 - (obj_score - self.det_momentum_thr) / (
+                1 - self.det_momentum_thr)
+            embed_mometum_factor = self.embed_momentum_factor + \
+                (1 - self.embed_momentum_factor) * det_conf
+            embed_mometum_factor = min(embed_mometum_factor, 1)  # clip to 1
 
-    def vel_direction_batch(self, bboxes1, bboxes2):
-        """Estimate the direction vector given two batches of boxes."""
-        cx1, cy1 = (bboxes1[:, 0] + bboxes1[:, 2]) / 2.0, (bboxes1[:, 1] +
-                                                           bboxes1[:, 3]) / 2.0
-        cx2, cy2 = (bboxes2[:, 0] + bboxes2[:, 2]) / 2.0, (bboxes2[:, 1] +
-                                                           bboxes2[:, 3]) / 2.0
-        speed_diff_y = cy2[None, :] - cy1[:, None]
-        speed_diff_x = cx2[None, :] - cx1[:, None]
-        speed = torch.cat((speed_diff_y[..., None], speed_diff_x[..., None]),
-                          dim=-1)
-        norm = torch.sqrt((speed[:, :, 0])**2 + (speed[:, :, 1])**2) + 1e-6
-        speed[:, :, 0] /= norm
-        speed[:, :, 1] /= norm
-        return speed
+            self.tracks[id].embed_momentum = embed_mometum_factor * self.tracks[id].embed_momentum + \
+                (1 - embed_mometum_factor) * self.tracks[id]['embeds'][-1]
 
-    def k_step_observation(self, track):
-        """return the observation k step away before."""
-        obs_seqs = track.obs
-        num_obs = len(obs_seqs)
-        if num_obs == 0:
-            return torch.tensor((-1, -1, -1, -1)).to(track.obs[0].device)
-        elif num_obs > self.vel_delta_t:
-            if obs_seqs[num_obs - 1 - self.vel_delta_t] is not None:
-                return obs_seqs[num_obs - 1 - self.vel_delta_t]
-            else:
-                return self.last_obs(track)
-        else:
-            return self.last_obs(track)
+    def compute_adaptive_weighted_matrix(self,
+                                         embed_costs,
+                                         w_assoc_embed,
+                                         max_diff=0.5):
+        w_emb = torch.full_like(embed_costs, w_assoc_embed)
+        w_emb_bonus = torch.full_like(embed_costs, 0.0)
+
+        # Needs two columns at least to make sense to boost
+        if embed_costs.size(1) >= 2:
+            for i in range(embed_costs.size(0)):
+                inds = torch.argsort(embed_costs[i])
+                # Row weight is difference between top / second top
+                row_weight = min(
+                    embed_costs[i, inds[1]] - embed_costs[i, inds[0]],
+                    max_diff)
+                # Add to row
+                w_emb_bonus[i] += row_weight / 2
+
+        if embed_costs.size(0) >= 2:
+            for j in range(embed_costs.size(1)):
+                inds = torch.argsort(embed_costs[:, j])
+                # Row weight is difference between top / second top
+                col_weight = min(
+                    embed_costs[inds[1], j] - embed_costs[inds[0], j],
+                    max_diff)
+                # Add to row
+                w_emb_bonus[:, j] += col_weight / 2
+
+        return w_emb + w_emb_bonus
 
     def ocm_assign_ids(self,
                        ids,
                        det_bboxes,
                        det_scores,
+                       det_embeds=None,
                        weight_iou_with_det_scores=False,
                        match_iou_thr=0.5):
         """Apply Observation-Centric Momentum (OCM) to assign ids.
@@ -163,6 +111,7 @@ class OCSORTTracker(SORTTracker):
             ids (list[int]): Tracking ids.
             det_bboxes (Tensor): of shape (N, 4)
             det_scores: (Tensor): of shape (N, )
+            det_embeds: (Tensor, optional): of shape (N, embed_dim)
             weight_iou_with_det_scores (bool, optional): Whether using
                 detection scores to weight IOU which is used for matching.
                 Defaults to False.
@@ -186,9 +135,23 @@ class OCSORTTracker(SORTTracker):
         ious = bbox_overlaps(track_bboxes, det_bboxes)
         if weight_iou_with_det_scores:
             ious *= det_scores[None]
-        dists = (1 - ious).cpu().numpy()
 
-        if len(ids) > 0 and len(det_bboxes) > 0:
+        if ious.size(0) == 0 or ious.size(1) == 0:
+            row = np.zeros(len(ids)).astype(np.int32) - 1
+            col = np.zeros(len(det_bboxes)).astype(np.int32) - 1
+
+            return row, col
+        else:
+            ious = ious.cpu().numpy()
+            assoc_iou_only = (ious >= match_iou_thr).int()
+            if assoc_iou_only.sum(0) == 1 and assoc_iou_only.sum(1) == 1:
+                row = np.where(assoc_iou_only)[1]
+                col = np.zeros(len(det_bboxes)).astype(np.int32) - 1
+
+                col[row] = np.arange(len(row))
+                return row, col
+
+            dists = 1 - ious
             track_velocities = torch.stack(
                 [self.tracks[id].velocity for id in ids]).to(det_bboxes.device)
             k_step_observations = torch.stack([
@@ -215,101 +178,34 @@ class OCSORTTracker(SORTTracker):
 
             dists += valid_norm_angle.cpu().numpy() * self.vel_consist_weight
 
-        # bipartite match
-        if dists.size > 0:
-            cost, row, col = lap.lapjv(
-                dists, extend_cost=True, cost_limit=1 - match_iou_thr)
-        else:
-            row = np.zeros(len(ids)).astype(np.int32) - 1
-            col = np.zeros(len(det_bboxes)).astype(np.int32) - 1
-        return row, col
+            # compute appearance distance
+            if det_embeds is not None:
+                track_embeds = torch.cat([
+                    self.tracks[id].embed_momentum for id in ids
+                ]).to(det_embeds.device)
+                embed_dists = torch.cdist(
+                    track_embeds,
+                    det_embeds,
+                    compute_mode='use_mm_for_euclid_dist')
+                weighted_matrix = self.compute_adaptive_weighted_matrix(
+                    embed_dists, self.w_assoc_embed, self.max_diff)
+                embed_dists *= weighted_matrix
 
-    def last_obs(self, track):
-        """extract the last associated observation."""
-        for bbox in track.obs[::-1]:
-            if bbox is not None:
-                return bbox
+                dists += embed_dists.cpu().numpy()
 
-    def ocr_assign_ids(self,
-                       track_obs,
-                       det_bboxes,
-                       det_scores,
-                       weight_iou_with_det_scores=False,
-                       match_iou_thr=0.5):
-        """Association for Observation-Centric Recovery.
-
-        As try to recover tracks from being lost whose estimated velocity is
-        out- to-date, we use IoU-only matching strategy.
-
-        Args:
-            track_obs (Tensor): the list of historical associated
-                detections of tracks
-            det_bboxes (Tensor): of shape (N, 4), unmatched detections
-            det_scores (Tensor): of shape (N, )
-            weight_iou_with_det_scores (bool, optional): Whether using
-                detection scores to weight IOU which is used for matching.
-                Defaults to False.
-            match_iou_thr (float, optional): Matching threshold.
-                Defaults to 0.5.
-
-        Returns:
-            tuple(int): The assigning ids.
-        """
-        # compute distance
-        ious = bbox_overlaps(track_obs, det_bboxes)
-        if weight_iou_with_det_scores:
-            ious *= det_scores[None]
-
-        dists = (1 - ious).cpu().numpy()
-
-        # bipartite match
-        if dists.size > 0:
-            cost, row, col = lap.lapjv(
-                dists, extend_cost=True, cost_limit=1 - match_iou_thr)
-        else:
-            row = np.zeros(len(track_obs)).astype(np.int32) - 1
-            col = np.zeros(len(det_bboxes)).astype(np.int32) - 1
-        return row, col
-
-    def online_smooth(self, track, obj):
-        """Once a track is recovered from being lost, online smooth its
-        parameters to fix the error accumulated during being lost.
-
-        NOTE: you can use different virtual trajectory generation
-        strategies, we adopt the naive linear interpolation as default
-        """
-        last_match_bbox = self.last_obs(track)
-        new_match_bbox = obj
-        unmatch_len = 0
-        for bbox in track.obs[::-1]:
-            if bbox is None:
-                unmatch_len += 1
-            else:
-                break
-        bbox_shift_per_step = (new_match_bbox - last_match_bbox) / (
-            unmatch_len + 1)
-        track.mean = track.saved_attr.mean
-        track.covariance = track.saved_attr.covariance
-        for i in range(unmatch_len):
-            virtual_bbox = last_match_bbox + (i + 1) * bbox_shift_per_step
-            virtual_bbox = bbox_xyxy_to_cxcyah(virtual_bbox[None, :])
-            virtual_bbox = virtual_bbox.squeeze(0).cpu().numpy()
-            track.mean, track.covariance = self.kf.update(
-                track.mean, track.covariance, virtual_bbox)
+            # bipartite match
+            cost, row, col = lap.lapjv(dists, extend_cost=True)
+            return row, col
 
     def track(self,
               model: torch.nn.Module,
               img: Tensor,
               feats: List[Tensor],
               data_sample: TrackDataSample,
+              data_preprocessor: OptConfigType = None,
               rescale: bool = False,
               **kwargs) -> InstanceData:
         """Tracking forward function.
-
-        NOTE: this implementation is slightly different from the original
-        OC-SORT implementation (https://github.com/noahcao/OC_SORT)that we
-        do association between detections and tentative/non-tentative tracks
-        independently while the original implementation combines them together.
 
         Args:
             model (nn.Module): MOT model.
@@ -332,6 +228,7 @@ class OCSORTTracker(SORTTracker):
             Each InstanceData usually contains ``bboxes``, ``labels``,
             ``scores`` and ``instances_id``.
         """
+
         metainfo = data_sample.metainfo
         bboxes = data_sample.pred_det_instances.bboxes
         labels = data_sample.pred_det_instances.labels
@@ -342,17 +239,37 @@ class OCSORTTracker(SORTTracker):
         if not hasattr(self, 'kf'):
             self.kf = model.motion
 
+        if self.with_reid:
+            if self.reid.get('img_norm_cfg', False):
+                img_norm_cfg = dict(
+                    mean=data_preprocessor.get('mean', [0.0, 0.0, 0.0]),
+                    std=data_preprocessor.get('std', [1.0, 1.0, 1.0]),
+                    to_bgr=data_preprocessor.get('rgb_to_bgr', False))
+                reid_img = imrenormalize(img, img_norm_cfg,
+                                         self.reid['img_norm_cfg'])
+            else:
+                reid_img = img.clone()
+
         if self.empty or bboxes.size(0) == 0:
             valid_inds = scores > self.init_track_thr
             bboxes = bboxes[valid_inds]
             labels = labels[valid_inds]
             scores = scores[valid_inds]
+
             num_new_tracks = bboxes.size(0)
             ids = torch.arange(
                 self.num_tracks,
                 self.num_tracks + num_new_tracks,
                 dtype=torch.long).to(bboxes.device)
             self.num_tracks += num_new_tracks
+            if self.with_reid:
+                det_crops = self.crop_imgs(reid_img, metainfo, bboxes.clone(),
+                                           rescale)
+                if det_crops.size(0) > 0:
+                    det_embeds = model.reid(det_crops, mode='tensor')
+                else:
+                    det_embeds = det_crops.new_zeros(
+                        (0, model.reid.head.out_channels))
         else:
             # 0. init
             ids = torch.full((bboxes.size(0), ), -1,
@@ -378,9 +295,16 @@ class OCSORTTracker(SORTTracker):
                  self.tracks[id].covariance) = self.kf.predict(
                      self.tracks[id].mean, self.tracks[id].covariance)
 
+            if self.with_reid:
+                det_crops = self.crop_imgs(reid_img, metainfo,
+                                           det_bboxes.clone(), rescale)
+                det_embeds = model.reid(det_crops, mode='tensor')
+            else:
+                det_embeds = None
+
             # 2. match detections and tracks' predicted locations
             match_track_inds, raw_match_det_inds = self.ocm_assign_ids(
-                self.confirmed_ids, det_bboxes, det_scores,
+                self.confirmed_ids, det_bboxes, det_scores, det_embeds,
                 self.weight_iou_with_det_scores, self.match_iou_thr)
             # '-1' mean a detection box is not matched with tracklets in
             # previous frame
@@ -406,7 +330,7 @@ class OCSORTTracker(SORTTracker):
             (tentative_match_track_inds,
              tentative_match_det_inds) = self.ocm_assign_ids(
                  self.unconfirmed_ids, unmatch_det_bboxes, unmatch_det_scores,
-                 self.weight_iou_with_det_scores, self.match_iou_thr)
+                 None, self.weight_iou_with_det_scores, self.match_iou_thr)
             valid = tentative_match_det_inds > -1
             unmatch_det_ids[valid] = torch.tensor(self.unconfirmed_ids)[
                 tentative_match_det_inds[valid]].to(labels)
@@ -502,8 +426,13 @@ class OCSORTTracker(SORTTracker):
                 self.num_tracks + new_track_inds.sum()).to(labels)
             self.num_tracks += new_track_inds.sum()
 
-        self.update(ids=ids, bboxes=bboxes, labels=labels, frame_ids=frame_id)
-        # return bboxes, labels, ids
+        self.update(
+            ids=ids,
+            bboxes=bboxes,
+            labels=labels,
+            scores=scores,
+            embeds=det_embeds if self.with_reid else None,
+            frame_ids=frame_id)
 
         # update pred_track_instances
         pred_track_instances = InstanceData()
