@@ -1,154 +1,158 @@
-# Copyright (c) OpenMMLab. All rights reserved.
+from typing import List, Union, Sequence, Any, Optional
+from argparse import ArgumentParser
 import os
 import os.path as osp
-import shutil
-from argparse import ArgumentParser
-from typing import List
 
-import torch
-from mmcv import VideoReader
-from mmengine.config import Config
-from mmengine.dataset import Compose, default_collate
-from tqdm import tqdm
+from torch import nn
 
-from mmtrack.apis import batch_inference_mot, init_model
-from mmtrack.models.mot import BaseMultiObjectTracker
+from mmengine.config import Config, DictAction
+from mmtrack.registry import MODELS
 from mmtrack.structures import TrackDataSample
+
+from mmengine import load, dump
 from mmtrack.utils import register_all_modules
+
+from mmcv import VideoReader, imread
+from mmtrack.apis import batch_inference_mot
 
 
 def parse_args():
-    parser = ArgumentParser(description='Test a model')
-
-    parser.add_argument('config', help='test config file path')
-    parser.add_argument('--input-dir', help='input directory contains videos')
-    parser.add_argument('--checkpoint', help='checkpoint file')
+    parser = ArgumentParser(description="Test a model")
+    parser.add_argument("config", help="test config file path")
+    parser.add_argument("--checkpoint", help="checkpoint file")
+    parser.add_argument("--batch-size", type=int, default=1, help="batch size")
     parser.add_argument(
-        '--batch-size', type=int, default=1, help='batch size for inference')
-    parser.add_argument(
-        '--device', default='cuda:0', help='device used for inference')
-    parser.add_argument('--output-dir', help='output directory')
-    parser.add_argument('--local_rank', type=int, default=0)
+        "--output-dir", default="outputs", help="output directory to save results"
+    )
 
+    parser.add_argument(
+        "--cfg-options",
+        nargs="+",
+        action=DictAction,
+        help="override some settings in the used config, the key-value pair "
+        "in xxx=yyy format will be merged into config file. If the value to "
+        'be overwritten is a list, it should be like key="[a,b]" or key=a,b '
+        'It also allows nested list/tuple values, e.g. key="[(a,b),(c,d)]" '
+        "Note that the quotation marks are necessary and that no white space "
+        "is allowed.",
+    )
+    parser.add_argument(
+        "--launcher",
+        choices=["none", "pytorch", "slurm", "mpi"],
+        default="none",
+        help="job launcher",
+    )
+    parser.add_argument("--local_rank", type=int, default=0)
     args = parser.parse_args()
-    if 'LOCAL_RANK' not in os.environ:
-        os.environ['LOCAL_RANK'] = str(args.local_rank)
-
-    return args
+    if "LOCAL_RANK" not in os.environ:
+        os.environ["LOCAL_RANK"] = str(args.local_rank)
 
 
-@torch.no_grad()
-def test_once(model: BaseMultiObjectTracker, vid_path: str, pipeline: Compose):
-    video = VideoReader(vid_path)
-    # device = nextmodel.parameters()
-    results: List[TrackDataSample] = []
-    with tqdm(video) as pbar:
-        for frame_id, frame in enumerate(pbar):
-            data = dict(
-                img=frame, frame_id=frame_id, ori_shape=frame.shape[:2])
-            data = pipeline(data)
+def run_vid_test(
+    model: nn.Module,
+    frames: Union[Sequence[str], Sequence[Any]],
+    data_pipeline: List[dict],
+    batch_size: int = 1,
+):
+    model.eval()
 
-            data = default_collate([data])
-            result = model.test_step(data)
-            results.extend(result)
-    return results
+    outputs: List[TrackDataSample] = []
+    data_iter = iter(frames)
+    frame_id_cnt = 0
+    done = False
+    while not done:
+        batched_frames = []
+        frame_ids = []
 
+        for _ in range(batch_size):
+            try:
+                frame = next(data_iter)
+                if isinstance(frame, str):
+                    frame = imread(frame)
+                batched_frames.append(frame)
+                frame_ids.append(frame_id_cnt)
+                frame_id_cnt += 1
+            except StopIteration:
+                done = True
+                break
+        batched_res = batch_inference_mot(
+            model, batched_frames, frame_ids, data_pipeline
+        )
 
-@torch.no_grad()
-def batch_test(model: BaseMultiObjectTracker,
-               vid_path: str,
-               batch_size: int = 4):
+        outputs.extend(batched_res)
 
-    video = VideoReader(vid_path)
-    results: List[TrackDataSample] = []
-
-    frame_id = 0
-    with tqdm(total=len(video)) as pbar:
-        while frame_id < len(video):
-            frame_ids = []
-            frames = []
-
-            for _ in range(batch_size):
-                if frame_id >= len(video):
-                    break
-
-                frame_ids.append(frame_id)
-                frames.append(video[frame_id])
-                frame_id += 1
-
-            result = batch_inference_mot(model, frames, frame_ids)
-            results.extend(result)
-
-            pbar.update(len(result))
-
-    return results
+    return outputs
 
 
-def save_pred(results: List[TrackDataSample], filepath: str):
-    """Save tracking results to a text file.
+def get_frames(data_root: str, video_name: str, data_prefix: Optional[str] = None):
+    if data_prefix is not None:
+        video_name = osp.join(data_prefix, video_name)
+    video_path = osp.join(data_root, video_name)
+    frames = os.listdir(video_path)
+    frames.sort()
 
-    Args:
-        results (list[dict]): Tracking results.
-        filepath (str): Path to save the tracking results.
-    """
-    with open(filepath, 'w') as f:
-        for track_sample in results:
-            track_ids = track_sample.pred_track_instances.instances_id
-            track_bboxes = track_sample.pred_track_instances.bboxes
-            track_scores = track_sample.pred_track_instances.scores
+    return frames
+
+
+def get_videos_info(data_root: str, ann_file: str):
+    annotations = load(osp.join(data_root, ann_file))["videos"]
+
+    return annotations
+
+
+def main(args):
+    register_all_modules(init_default_scope=False)
+
+    cfg = Config.fromfile(args.config)
+    cfg.launcher = args.launcher
+    if args.cfg_options is not None:
+        cfg.merge_from_dict(args.cfg_options)
+
+    cfg.load_from = args.checkpoint
+
+    # build the model and load checkpoint
+    model = MODELS.build(cfg.model)
+    model.init_weights()
+
+    # prepare data
+    data_cfg = cfg.test_dataloader.dataset
+    videos_info = get_videos_info(data_cfg.data_root, data_cfg.ann_file)
+
+    pred_results = []
+    for vid_info in videos_info:
+        frames = get_frames(data_cfg.data_root, vid_info["name"], data_cfg.data_prefix)
+        vid_track_results = run_vid_test(
+            model, frames, data_cfg.pipeline, args.batch_size
+        )
+
+        for track_result in vid_track_results:
+            track_ids = track_result.pred_track_instances.instance_id  # type: ignore
+            track_bboxes = track_result.pred_track_instances.bboxes  # type: ignore
+            track_scores = track_result.pred_track_instances.scores  # type: ignore
+
             # Convert bbox to xywh format
             track_bboxes[:, 2] -= track_bboxes[:, 0]
             track_bboxes[:, 3] -= track_bboxes[:, 1]
 
             for track_id, track_bbox, track_score in zip(
-                    track_ids, track_bboxes, track_scores):
-                f.write(
-                    f"{track_sample.metainfo['frame_id']},{track_id},{track_bbox[0]:.3f},{track_bbox[1]:.3f},{track_bbox[2]:.3f},{track_bbox[3]:.3f},{track_score:.3f},-1,-1,-1\n"
+                track_ids, track_bboxes, track_scores
+            ):
+                pred_results.append(
+                    {
+                        "video_id": vid_info["id"],
+                        "frame_id": track_result.metainfo["frame_id"],
+                        "track_id": track_id,
+                        "bbox": track_bbox.tolist(),
+                        "score": track_score.item(),
+                    }
                 )
+        pred_results.extend(vid_track_results)
+    dump(
+        {"videos": videos_info, "results": pred_results},
+        osp.join(args.output_dir, "results.json"),
+    )
 
 
-def main(args):
-    # register all modules in mmtrack into the registries
-    # do not init the default scope here because it will be init in the runner
-    register_all_modules()
-
-    # load config
-    cfg = Config.fromfile(args.config)
-
-    # work_dir is determined in this priority: CLI > segment in file > filename
-    if args.output_dir is None:
-        args.output_dir = osp.join('./test_outputs',
-                                   osp.splitext(osp.basename(args.config))[0])
-
-    # clean the output directory
-    if osp.exists(args.output_dir):
-        shutil.rmtree(args.output_dir)
-    os.makedirs(args.output_dir)
-
-    model = init_model(cfg, args.checkpoint, device=args.device)
-
-    for vid_name in os.scandir(args.input_dir):
-        if vid_name.is_file() and vid_name.name.endswith('.mp4'):
-            print(f'Testing {vid_name.name} ...')
-            # results = test_once(model, osp.join(args.input_dir, vid_name.name), test_pipeline)
-            results = batch_test(
-                model,
-                osp.join(args.input_dir, vid_name.name),
-                batch_size=args.batch_size)
-
-            print(
-                f'Saving results to {osp.join(args.output_dir, vid_name.name)} ...'
-            )
-            save_pred(
-                results,
-                osp.join(args.output_dir,
-                         osp.splitext(vid_name.name)[0] + '.txt'))
-        else:
-            print(f'Skipping {vid_name.name} ...')
-
-    print('Done!')
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_args()
     main(args)

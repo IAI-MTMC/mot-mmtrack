@@ -11,7 +11,7 @@ model = dict(
         bbox_head=dict(head_module=dict(num_classes=1)),
         init_cfg=dict(
             type='Pretrained',
-            checkpoint='checkpoints/yolov8_m_syncbn_fast_1xb64_vtx.pth')),
+            checkpoint='checkpoints/yolov8_m_syncbn_fast_1xb64_10e_vtx.pth')),
     motion=dict(type='KalmanFilter'),
     tracker=dict(
         type='ByteTracker',

@@ -1,9 +1,11 @@
+mmengine>=0.1.0
+mmcv>=2.0.0rc1
+mmcls==1.0.0rc5
+mmdet==3.0.0rc5
+mmyolo==0.4.0
+mmpose==1.0.0rc0
+numpy==1.23.1
 gdown
 git+https://github.com/JonathonLuiten/TrackEval.git
-mmcls>=1.0.0rc0
-mmcv>=2.0.0rc1
-mmdet>=3.0.0rc0,<3.0.0rc6
-mmengine>=0.1.0
-mmpose>=1.0.0rc0
 tensorboard
 torchreid

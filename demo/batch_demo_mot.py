@@ -44,6 +44,7 @@ def main(args):
     if args.output is not None:
         if args.output.endswith('.mp4'):
             OUT_VIDEO = True
+            os.makedirs(osp.dirname(args.output), exist_ok=True)
         else:
             out_path = args.output
             os.makedirs(out_path, exist_ok=True)
@@ -60,6 +61,7 @@ def main(args):
 
     # build the model from a config file and a checkpoint file
     model = init_model(args.config, args.checkpoint, device=args.device)
+    data_pipeline = model.cfg.test_pipeline[2:]
 
     prog_bar = mmengine.ProgressBar(len(imgs))
     # test and show/save the images
@@ -77,7 +79,7 @@ def main(args):
             batch_frame_ids.append(frame_id_cnt)
             frame_id_cnt += 1
 
-        results = batch_inference_mot(model, batched_imgs, batch_frame_ids)
+        results = batch_inference_mot(model, batched_imgs, batch_frame_ids, data_pipeline)
         outputs.extend(results)
 
         prog_bar.update(len(results))
