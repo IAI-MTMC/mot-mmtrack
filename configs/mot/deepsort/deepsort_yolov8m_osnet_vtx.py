@@ -1,7 +1,6 @@
 _base_ = [
     '../../_base_/models/yolov8_m_syncbn_fast.py',
-    '../../_base_/datasets/vtx.py',
-    '../../_base_/default_runtime.py'
+    '../../_base_/datasets/vtx.py', '../../_base_/default_runtime.py'
 ]
 
 custom_imports = dict(
@@ -10,11 +9,12 @@ custom_imports = dict(
 model = dict(
     type='DeepSORT',
     detector=dict(
-        bbox_head=dict(
-            head_module=dict(num_classes=1)),
+        bbox_head=dict(head_module=dict(num_classes=1)),
         test_cfg=dict(score_thr=0.01, nms=dict(type='nms', iou_threshold=0.7)),
         init_cfg=dict(
-            type='Pretrained', checkpoint='work_dirs/yolov8_m_syncbn_fast_1xb16-10e_vtx/epoch_10.pth')),
+            type='Pretrained',
+            checkpoint=
+            'work_dirs/yolov8_m_syncbn_fast_1xb16-10e_vtx/epoch_10.pth')),
     motion=dict(type='KalmanFilter', center_only=False),
     reid=dict(
         type='MyReID',

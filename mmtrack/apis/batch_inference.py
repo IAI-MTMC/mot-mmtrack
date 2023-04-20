@@ -11,10 +11,8 @@ from mmtrack.structures import TrackDataSample
 
 
 def batch_inference_mot(
-    model: nn.Module,
-    imgs: List[np.ndarray],
-    frame_ids: List[int],
-    data_pipeline: Union[List[dict], Compose]) -> List[TrackDataSample]:
+        model: nn.Module, imgs: List[np.ndarray], frame_ids: List[int],
+        data_pipeline: Union[List[dict], Compose]) -> List[TrackDataSample]:
     """Inference image(s) with the mot model.
 
     Args:

@@ -79,7 +79,8 @@ def main(args):
             batch_frame_ids.append(frame_id_cnt)
             frame_id_cnt += 1
 
-        results = batch_inference_mot(model, batched_imgs, batch_frame_ids, data_pipeline)
+        results = batch_inference_mot(model, batched_imgs, batch_frame_ids,
+                                      data_pipeline)
         outputs.extend(results)
 
         prog_bar.update(len(results))
