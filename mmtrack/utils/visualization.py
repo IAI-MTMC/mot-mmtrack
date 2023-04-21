@@ -55,10 +55,10 @@ def draw_tracked_instances(image: np.ndarray,
         (text_w, text_h), _ = cv2.getTextSize(label, font, font_scale,
                                               font_thickness)
         cv2.rectangle(image,
-                      (box[0] - text_padding, box[1] - text_h - text_padding),
+                      (box[0] - text_padding, box[1] + text_h + text_padding),
                       (box[0] + text_w + text_padding, box[1] + text_padding),
                       color, -1)
-        cv2.putText(image, label, (box[0], box[1]), font, font_scale,
+        cv2.putText(image, label, (box[0], box[1] + text_h), font, font_scale,
                     (255, 255, 255), font_thickness, cv2.LINE_AA)
 
     return image

@@ -340,9 +340,12 @@ def main(args):
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
 
+    data_cfg = cfg.test_dataloader.dataset
+
+    subset_name = osp.splitext(osp.basename(data_cfg.ann_file))[0]
     tracker_name = osp.splitext(osp.basename(args.config))[0]
     os.makedirs(args.output_dir, exist_ok=True)
-    out_file = osp.join(args.output_dir, tracker_name + '.json')
+    out_file = osp.join(args.output_dir, f'{tracker_name}-{subset_name}.json')
 
     # Generate results of tracker
     if not osp.exists(out_file):
@@ -354,7 +357,6 @@ def main(args):
         model.to(args.device)
 
         # prepare data
-        data_cfg = cfg.test_dataloader.dataset
         annotations = load_annotations(data_cfg.data_root, data_cfg.ann_file)
 
         pred_results = []
@@ -392,12 +394,13 @@ def main(args):
                             track_score.item(),
                         })
         annotations['predictions'] = pred_results
+        print(f'Saving results to {out_file}...')
         dump(annotations, out_file)
 
     # Start evaluating...
     track_results = load(out_file)
     run_evaluate(track_results, tracker_name, args.error_analysis,
-                 cfg.test_dataloader.dataset.data_root)
+                 data_cfg.data_root)
 
 
 if __name__ == '__main__':
