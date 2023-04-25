@@ -132,4 +132,7 @@ demo/debug_mot.py
 outputs/
 
 checkpoints/
+mot.mp4
+
+demo/vis
 

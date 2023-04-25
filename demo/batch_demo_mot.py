@@ -3,6 +3,7 @@ import os.path as osp
 import tempfile
 from argparse import ArgumentParser
 
+import cv2
 import mmcv
 import mmengine
 
@@ -22,8 +23,22 @@ def parse_args():
         '--device', default='cuda:0', help='device used for inference')
     parser.add_argument('--fps', help='FPS of the output video')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
+    parser.add_argument(
+        '--vis-pose', type=bool, default=False, help='visualize pose')
     args = parser.parse_args()
     return args
+
+
+def draw_image(pose, img):
+    color = (100, 255, 100)
+    thickness = 2
+    for k in range(len(pose)):
+        landmarks = pose[k].pred_instances.keypoints.reshape(-1, 2)
+        for i in range(landmarks.shape[0]):
+            center_coordinates = (int(landmarks[i][0]), int(landmarks[i][1]))
+            radius = 2
+            img = cv2.circle(img, center_coordinates, radius, color, thickness)
+    return img
 
 
 def main(args):
@@ -83,7 +98,6 @@ def main(args):
         prog_bar.update(len(results))
 
     print(f'\nmaking the output video at {args.output} with a FPS of {fps}')
-    import cv2
 
     if OUT_VIDEO:
         height, width = outputs[0].metainfo['ori_shape']
@@ -92,6 +106,10 @@ def main(args):
     for result in outputs:
         frame_id = result.metainfo['frame_id']
         out_img = draw_tracked_instances(imgs[frame_id], result)
+
+        if args.vis_pose:
+            pose_result = result.pred_track_instances.pose
+            out_img = draw_image(pose_result, out_img)
 
         if OUT_VIDEO:
             vwriter.write(out_img)

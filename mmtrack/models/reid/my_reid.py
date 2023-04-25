@@ -28,7 +28,8 @@ def osnet_x1_0(num_classes=1000,
 @MODELS.register_module()
 class MyReID(BaseModel):
 
-    def __init__(self, model_name: str, model_path: str, device: str):
+    def __init__(self, model_name: str, model_path: str, device: str,
+                 feature_dim: int):
         super().__init__()
 
         pretrained = (model_path and check_isfile(model_path))
@@ -36,7 +37,7 @@ class MyReID(BaseModel):
             num_classes=1,
             pretrained=not pretrained,
             loss='triplet',
-            feature_dim=256,
+            feature_dim=feature_dim,
             use_gpu=device.startswith('cuda'))
         self.model.eval()
         if pretrained:
@@ -57,29 +58,29 @@ class MyReID(BaseModel):
         return Head()
 
     def forward(self, inputs, mode: str = 'tensor', frame_id=-1):
+        import os
         import cv2
         import numpy as np
 
         mean = np.array([[[123.675, 116.28, 103.53]]])
         std = np.array([[[58.395, 57.12, 57.375]]])
 
+        try:
+            os.makedirs("images")
+        except FileExistsError:
+            pass
+
         for i, img in enumerate(inputs):
             img = img.detach().moveaxis(0, -1).cpu().numpy()
             img = img * std + mean
             img_path = 'images/image_' + str(frame_id) + '_' + str(i) + '.jpg'
-            cv2.imwrite(img_path, img[..., ::-1])
+            # cv2.imwrite(img_path, img[..., ::-1])
 
-        print('crop images: ', inputs.shape)
+        # print('crop images: ', inputs.shape)
 
         # self.test_reid()
         assert mode == 'tensor', "Only support tensor mode"
-        # print(inputs.max(), inputs.min())
         features = self.model(inputs)
-        # print(features.min(), features.max())
-        # print(features[0])
-
-        # import torch
-        # print(torch.cdist(features, features))
         return features
 
     def test_reid(self):
@@ -112,7 +113,7 @@ class MyReID(BaseModel):
             img = (img * std + mean) * 255
             img = img.numpy()
             img = img[..., ::-1]
-            cv2.imwrite(image_path.split('/')[-1], img)
+            # cv2.imwrite(image_path.split('/')[-1], img)
 
         images = torch.stack(images, dim=0)
         images = images.cuda()

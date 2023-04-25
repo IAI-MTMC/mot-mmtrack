@@ -31,7 +31,7 @@ def draw_tracked_instances(image: np.ndarray,
     # Adapt the font size according to the image size
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = min(image.shape[0], image.shape[1]) * 5e-4
-    font_thickness = 2
+    font_thickness = 1
     text_padding = 1
 
     pred_track_instances = track_sample.pred_track_instances
