@@ -9,10 +9,15 @@ from motmetrics.lap import linear_sum_assignment
 from torch import Tensor
 
 from mmtrack.registry import MODELS
+from mmtrack.structures.bbox.transforms import bbox_cxcyah_to_xyxy
 from mmtrack.structures import TrackDataSample
-from mmtrack.structures.bbox import bbox_xyxy_to_cxcyah
+from mmtrack.structures.bbox import bbox_xyxy_to_cxcyah, expanse_bbox
 from mmtrack.utils import OptConfigType, imrenormalize
 from .base_tracker import BaseTracker
+
+import numpy as np
+from mmtrack.models.pose import PosePipeline
+
 
 
 @MODELS.register_module()
@@ -40,18 +45,24 @@ class MySORTTracker(BaseTracker):
     def __init__(self,
                  obj_score_thr: float = 0.3,
                  reid: dict = dict(
+                     reid=True,
+                     pose=False,
                      num_samples=10,
                      img_scale=(256, 128),
                      img_norm_cfg=None,
                      match_score_thr=2.0),
                  match_iou_thr: float = 0.7,
                  num_tentatives: int = 3,
+                 biou: int = None,
                  **kwargs):
         super().__init__(**kwargs)
         self.obj_score_thr = obj_score_thr
         self.reid = reid
         self.match_iou_thr = match_iou_thr
         self.num_tentatives = num_tentatives
+        self.biou = biou
+
+        self.pose_pipeline = PosePipeline()
 
     @property
     def confirmed_ids(self) -> List:
@@ -152,6 +163,10 @@ class MySORTTracker(BaseTracker):
         labels = labels[valid_inds]
         scores = scores[valid_inds]
 
+        print()
+        print('bboxes:', bboxes.shape[0], '---', 'scores:', scores)
+        print('frame_id:', frame_id, '---', 'reid_image:', reid_img.shape)
+
         if self.empty or bboxes.size(0) == 0:
             num_new_tracks = bboxes.size(0)
             ids = torch.arange(
@@ -162,32 +177,92 @@ class MySORTTracker(BaseTracker):
             if self.with_reid:
                 crops = self.crop_imgs(reid_img, metainfo, bboxes.clone(),
                                        rescale)
+
                 if crops.size(0) > 0:
-                    embeds = model.reid(crops, mode='tensor')
+                    embeds = torch.zeros((crops.shape[0], 0),
+                                         device=crops.device)
+                    if self.reid.get('reid', None):
+                        embeds_reid = model.reid(
+                            crops, mode='tensor', frame_id=frame_id)
+                        embeds = torch.cat((embeds, embeds_reid), dim=1)
+                    if self.reid.get('pose', None):
+                        pose_results, pose_embedded = self.get_pose_embedded(
+                            bboxes.clone(), scores.clone(), metainfo, reid_img,
+                            crops, model.pose)
+                        embeds = torch.cat(
+                            (embeds, pose_embedded.to(embeds.device)), dim=1)
                 else:
-                    embeds = crops.new_zeros((0, model.reid.head.out_channels))
+                    embeds = torch.zeros((0, 0), device=crops.device)
+                    if self.reid.get('reid', None):
+                        embeds_reid = crops.new_zeros(
+                            (0, model.reid.head.out_channels))
+                        embeds = torch.cat((embeds, embeds_reid), dim=1)
+                    if self.reid.get('pose', None):
+                        pose_embedded = crops.new_zeros((0, self.pose_pipeline.embedding_size))
+                        pose_results = []
+                        embeds = torch.cat(
+                            (embeds, pose_embedded.to(embeds.device)), dim=1)
         else:
             ids = torch.full((bboxes.size(0), ), -1,
                              dtype=torch.long).to(bboxes.device)
 
             # motion
             if model.with_motion:
-                self.tracks, costs = model.motion.track(
-                    self.tracks, bbox_xyxy_to_cxcyah(bboxes))
+                # self.tracks, costs = model.motion.track(
+                #     self.tracks, bbox_xyxy_to_cxcyah(bboxes))
+
+                kf_bboxes = []
+
+                for id, track in self.tracks.items():
+                    if track.frame_ids[-1] != frame_id - 1:
+                        track.mean[7] = 0
+
+                    track.mean, track.covariance = model.motion.predict(
+                        track.mean, track.covariance)
+
+                    kf_bboxes.append(torch.from_numpy(track.mean[:4]))
+
+                if len(kf_bboxes) > 0:
+                    kf_bboxes = torch.stack(kf_bboxes, dim=0).to(bboxes)
+                    kf_bboxes = bbox_cxcyah_to_xyxy(kf_bboxes)
+                    kf_ids = torch.tensor(
+                        self.confirmed_ids,
+                        dtype=torch.long,
+                        device=bboxes.device)
+                print('kf_bboxes:', len(kf_bboxes))
 
             active_ids = self.confirmed_ids
+
             if self.with_reid:
                 crops = self.crop_imgs(reid_img, metainfo, bboxes.clone(),
                                        rescale)
-                embeds = model.reid(crops, mode='tensor')
 
-                # reid
+                embeds = torch.zeros((crops.shape[0], 0), device=crops.device)
+                if self.reid.get('reid', None):
+                    embeds_reid = model.reid(
+                        crops, mode='tensor', frame_id=frame_id)
+                    embeds = torch.cat((embeds, embeds_reid), dim=1)
+
+                if self.reid.get('pose', None):
+                    pose_results, pose_embedded = self.pose_pipeline.get_pose_embedded(
+                        bboxes.clone(), scores.clone(), metainfo, reid_img,
+                        crops, model.pose)
+                    embeds = torch.cat(
+                        (embeds, pose_embedded.to(embeds.device)), dim=1)
+
+                print('reid_mtaching')
+                print('activate_ids:', active_ids, '---', 'self.ids:',
+                      self.ids)
+
                 if len(active_ids) > 0:
                     track_embeds = self.get(
                         'embeds',
                         active_ids,
                         self.reid.get('num_samples', None),
                         behavior='mean')
+
+                    print('track_embeds:', track_embeds.shape, '---',
+                          'embeds:', embeds.shape)
                     reid_dists = torch.cdist(track_embeds, embeds)
 
                     # support multi-class association
@@ -198,8 +273,11 @@ class MySORTTracker(BaseTracker):
                     cate_cost = (1 - cate_match.int()) * 1e6
                     reid_dists = (reid_dists + cate_cost).cpu().numpy()
 
-                    valid_inds = [list(self.ids).index(_) for _ in active_ids]
-                    reid_dists[~np.isfinite(costs[valid_inds, :])] = np.nan
+                    # valid_inds = [list(self.ids).index(_) for _ in active_ids]
+                    # reid_dists[~np.isfinite(costs[valid_inds, :])] = np.nan
+
+                    print('reid_dist')
+                    print(reid_dists)
 
                     row, col = linear_sum_assignment(reid_dists)
                     for r, c in zip(row, col):
@@ -211,12 +289,31 @@ class MySORTTracker(BaseTracker):
 
             active_ids = [
                 id for id in self.ids if id not in ids
-                and self.tracks[id].frame_ids[-1] == frame_id - 1
+                # and self.tracks[id].frame_ids[-1] == frame_id - 1
             ]
+
             if len(active_ids) > 0:
                 active_dets = torch.nonzero(ids == -1).squeeze(1)
-                track_bboxes = self.get('bboxes', active_ids)
-                ious = bbox_overlaps(track_bboxes, bboxes[active_dets])
+                # track_bboxes = self.get('bboxes', active_ids)
+                print('iou_mtaching')
+                print(
+                    print('active_ids:', active_ids), '---', 'active_dets:',
+                    active_dets)
+
+                track_bboxes = np.zeros((0, 4))
+                for id in active_ids:
+                    track_bboxes = np.concatenate(
+                        (track_bboxes, self.tracks[id].mean[:4][None]), axis=0)
+                track_bboxes = torch.from_numpy(track_bboxes).to(bboxes.device)
+                track_bboxes = bbox_cxcyah_to_xyxy(track_bboxes)
+
+                if self.biou is not None:
+                    ious = bbox_overlaps(
+                        expanse_bbox(track_bboxes, self.biou),
+                        expanse_bbox(bboxes[active_dets], self.biou))
+
+                else:
+                    ious = bbox_overlaps(track_bboxes, bboxes[active_dets])
 
                 # support multi-class association
                 track_labels = torch.tensor([
@@ -227,6 +324,8 @@ class MySORTTracker(BaseTracker):
 
                 dists = (1 - ious + cate_cost).cpu().numpy()
 
+                print('bbox dists:')
+                print(dists)
                 row, col = linear_sum_assignment(dists)
                 for r, c in zip(row, col):
                     dist = dists[r, c]
@@ -248,12 +347,34 @@ class MySORTTracker(BaseTracker):
             embeds=embeds if self.with_reid else None,
             frame_ids=frame_id)
 
+        print('match id:', ids)
+
         # update pred_track_instances
+        # try:
+        #     print('kf: ', kf_bboxes.shape, kf_ids.shape)
+        #     pred_track_instances = InstanceData()
+        #     pred_track_instances.bboxes = torch.cat((kf_bboxes, bboxes))
+        #     pred_track_instances.labels = torch.cat(
+        #         (torch.zeros(kf_bboxes.size(0)).to(labels), labels))
+        #     pred_track_instances.scores = torch.cat(
+        #         (torch.zeros(kf_bboxes.size(0)).to(scores), scores))
+        #     pred_track_instances.instances_id = torch.cat(
+        #         (kf_ids.to(ids), ids))
+        #     print('done')
+        # except:
+        #     print('exception')
+        #     pred_track_instances = InstanceData()
+        #     pred_track_instances.bboxes = bboxes
+        #     pred_track_instances.labels zzzz= labels
+        #     pred_track_instances.scores = scores
+        #     pred_track_instances.instances_id = ids
+
         pred_track_instances = InstanceData()
         pred_track_instances.bboxes = bboxes
         pred_track_instances.labels = labels
         pred_track_instances.scores = scores
         pred_track_instances.instances_id = ids
-        pred_track_instances.embeds = embeds if self.with_reid else None
+        pred_track_instances.pose = pose_results if self.with_reid and self.reid.get(
+            'pose', None) else None
 
         return pred_track_instances

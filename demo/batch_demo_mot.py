@@ -1,8 +1,8 @@
 import os
 import os.path as osp
-import tempfile
 from argparse import ArgumentParser
 
+import cv2
 import mmcv
 import mmengine
 
@@ -22,6 +22,8 @@ def parse_args():
         '--device', default='cuda:0', help='device used for inference')
     parser.add_argument('--fps', help='FPS of the output video')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
+    parser.add_argument(
+        '--vis-pose', type=bool, default=False, help='visualize pose')
     args = parser.parse_args()
     return args
 
@@ -86,20 +88,20 @@ def main(args):
         prog_bar.update(len(results))
 
     print(f'\nmaking the output video at {args.output} with a FPS of {fps}')
-    import cv2
 
     if OUT_VIDEO:
         height, width = outputs[0].metainfo['ori_shape']
         vwriter = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'mp4v'),
                                   fps, (width, height))
+
     for result in outputs:
         frame_id = result.metainfo['frame_id']
-        out_img = draw_tracked_instances(imgs[frame_id], result)
-
+        out_img = draw_tracked_instances(imgs[frame_id], result, args.vis_pose)
         if OUT_VIDEO:
             vwriter.write(out_img)
         else:
             mmcv.imwrite(out_img, osp.join(out_path, f'{frame_id:06d}.jpg'))
+
     if OUT_VIDEO:
         vwriter.release()
 

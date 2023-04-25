@@ -5,7 +5,7 @@ _base_ = [
 
 custom_imports = dict(
     imports=[
-        'mmtrack.models.mot.my_deep_sort',
+        'mmtrack.models.mot.my_deep_sort', 'mmtrack.models.reid.my_reid',
         'mmtrack.models.trackers.my_sort_tracker'
     ],
     allow_failed_imports=False)
@@ -18,6 +18,12 @@ model = dict(
         init_cfg=dict(
             type='Pretrained', checkpoint='checkpoints/detect/epoch_10.pth')),
     motion=dict(type='KalmanFilter', center_only=False),
+    reid=dict(
+        type='MyReID',
+        model_name='osnet_x1_0',
+        model_path='checkpoints/reid/model.pth.tar-100',
+        device='cuda',
+        feature_dim=512),
     pose=dict(
         type='TopdownPoseEstimator',
         _scope_='mmpose',
@@ -53,7 +59,7 @@ model = dict(
         obj_score_thr=0.5,
         reid=dict(
             pose=True,
-            reid=False,
+            reid=True,
             num_samples=10,
             img_scale=(256, 128),
             img_norm_cfg=dict(
@@ -64,5 +70,4 @@ model = dict(
         match_iou_thr=0.5,
         momentums=None,
         num_tentatives=2,
-        num_frames_retain=100,
-        pose=True))
+        num_frames_retain=100))

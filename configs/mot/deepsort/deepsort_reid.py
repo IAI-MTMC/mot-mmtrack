@@ -28,6 +28,8 @@ model = dict(
         type='MySORTTracker',
         obj_score_thr=0.5,
         reid=dict(
+            pose=False,
+            reid=True,
             num_samples=10,
             img_scale=(256, 128),
             img_norm_cfg=dict(
@@ -39,6 +41,3 @@ model = dict(
         momentums=None,
         num_tentatives=2,
         num_frames_retain=100))
-
-test_dataloader = dict(
-    dataset=dict(ann_file='sparse_val_cocoformat.json'))
