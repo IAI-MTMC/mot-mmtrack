@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument('--checkpoint', help='checkpoint file')
     parser.add_argument('--device', default='cuda:0', help='device')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
+    parser.add_argument('--no-cache', action='store_true', help='run evaluation without cache')
     parser.add_argument(
         '--error-analysis', action='store_true', help='run error analysis')
     parser.add_argument(
@@ -125,6 +126,9 @@ def run_vid_test(
                                           data_pipeline)
 
         outputs.extend(batched_res)
+
+        if len(outputs) % 100 == 0:
+            print(f'Processed {len(outputs)} frames')
 
     return outputs
 
@@ -348,7 +352,7 @@ def main(args):
     out_file = osp.join(args.output_dir, f'{tracker_name}-{subset_name}.json')
 
     # Generate results of tracker
-    if not osp.exists(out_file):
+    if not osp.exists(out_file) or args.no_cache:
         cfg.load_from = args.checkpoint
 
         # build the model and load checkpoint
