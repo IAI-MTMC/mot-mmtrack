@@ -45,8 +45,8 @@ class MySORTTracker(BaseTracker):
     def __init__(self,
                  obj_score_thr: float = 0.3,
                  reid: dict = dict(
-                     reid=True,
                      pose=False,
+                     reid=True,
                      num_samples=10,
                      img_scale=(256, 128),
                      img_norm_cfg=None,
@@ -54,7 +54,6 @@ class MySORTTracker(BaseTracker):
                  match_iou_thr: float = 0.7,
                  num_tentatives: int = 3,
                  biou: int = None,
-                 pose: bool = False,
                  **kwargs):
         super().__init__(**kwargs)
         self.obj_score_thr = obj_score_thr
@@ -62,7 +61,6 @@ class MySORTTracker(BaseTracker):
         self.match_iou_thr = match_iou_thr
         self.num_tentatives = num_tentatives
         self.biou = biou
-        self.pose = pose
 
         self.pose_pipeline = Compose(
             [LoadImage(),
@@ -272,6 +270,9 @@ class MySORTTracker(BaseTracker):
                           'embeds:', embeds.shape)
                     reid_dists = torch.cdist(track_embeds, embeds)
 
+                    print('reid_dist')
+                    print(reid_dists)
+
                     # support multi-class association
                     track_labels = torch.tensor([
                         self.tracks[id]['labels'][-1] for id in active_ids
@@ -282,9 +283,6 @@ class MySORTTracker(BaseTracker):
 
                     # valid_inds = [list(self.ids).index(_) for _ in active_ids]
                     # reid_dists[~np.isfinite(costs[valid_inds, :])] = np.nan
-
-                    print('reid_dist')
-                    print(reid_dists)
 
                     row, col = linear_sum_assignment(reid_dists)
                     for r, c in zip(row, col):
@@ -303,9 +301,8 @@ class MySORTTracker(BaseTracker):
                 active_dets = torch.nonzero(ids == -1).squeeze(1)
                 # track_bboxes = self.get('bboxes', active_ids)
                 print('iou_mtaching')
-                print(
-                    print('active_ids:', active_ids), '---', 'active_dets:',
-                    active_dets)
+                print('active_ids:', active_ids, '---', 'active_dets:',
+                      active_dets)
 
                 track_bboxes = np.zeros((0, 4))
                 for id in active_ids:
@@ -381,8 +378,8 @@ class MySORTTracker(BaseTracker):
         pred_track_instances.labels = labels
         pred_track_instances.scores = scores
         pred_track_instances.instances_id = ids
-        pred_track_instances.pose = pose_results if self.with_reid and self.reid.get(
-            'pose', None) else None
+        if self.with_reid and self.reid.get('pose', None):
+            pred_track_instances.pose = pose_results
 
         return pred_track_instances
 

@@ -4,6 +4,6 @@ configs/mot/deepsort/deepsort_reid.py \
 
 python demo/batch_demo_mot.py \
 configs/mot/deepsort/deepsort_pose.py \
---input demo/test3.mp4 --output mot.mp4 --batch-size=4
+--input demo/vis/test3.mp4 --output mot.mp4 --batch-size=4
 
 # python tools/test.py configs/mot/deepsort/deepsort_pose.py
