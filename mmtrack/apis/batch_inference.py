@@ -1,5 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from typing import List
+from typing import List, Union
 
 import numpy as np
 import torch
@@ -10,22 +10,22 @@ from torch import nn
 from mmtrack.structures import TrackDataSample
 
 
-def batch_inference_mot(model: nn.Module, imgs: List[np.ndarray],
-                        frame_ids: List[int]) -> List[TrackDataSample]:
+def batch_inference_mot(
+        model: nn.Module, imgs: List[np.ndarray], frame_ids: List[int],
+        data_pipeline: Union[List[dict], Compose]) -> List[TrackDataSample]:
     """Inference image(s) with the mot model.
 
     Args:
         model (nn.Module): The loaded mot model.
         imgs (List[np.ndarray]): Loaded images in shape (H x W x C).
         frame_ids (List[int]): List of frame id for each image.
+        data_pipeline (Compose): Data processing pipeline.
 
     Returns:
         SampleList: The tracking data samples.
     """
-    cfg = model.cfg
-
-    # remove the "LoadImageFromFile" and "LoadTrackAnnotations" in pipeline
-    test_pipeline = Compose(cfg.test_dataloader.dataset.pipeline[2:])
+    if not isinstance(data_pipeline, Compose):
+        data_pipeline = Compose(data_pipeline)
 
     data_samples = []
     for frame_id, img in zip(frame_ids, imgs):
@@ -33,7 +33,7 @@ def batch_inference_mot(model: nn.Module, imgs: List[np.ndarray],
             img=img.astype(np.float32),
             frame_id=frame_id,
             ori_shape=img.shape[:2])
-        data = test_pipeline(data)
+        data = data_pipeline(data)
         data_samples.append(data)
     data_samples = default_collate(data_samples)
 

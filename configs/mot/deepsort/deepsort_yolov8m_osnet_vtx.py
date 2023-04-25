@@ -3,7 +3,12 @@ _base_ = [
     '../../_base_/datasets/vtx.py', '../../_base_/default_runtime.py'
 ]
 
-custom_imports = dict(imports=[''], allow_failed_imports=False)
+custom_imports = dict(
+    imports=[
+        'mmtrack.models.reid.my_reid',
+        'mmtrack.models.trackers.my_sort_tracker'
+    ],
+    allow_failed_imports=False)
 
 model = dict(
     type='DeepSORT',
@@ -20,7 +25,7 @@ model = dict(
         device='cuda',
         feature_dim=512),
     tracker=dict(
-        type='SORTTracker',
+        type='MySORTTracker',
         obj_score_thr=0.5,
         reid=dict(
             num_samples=10,
@@ -34,3 +39,5 @@ model = dict(
         momentums=None,
         num_tentatives=2,
         num_frames_retain=100))
+
+test_dataloader = dict(dataset=dict(ann_file='sparse_val_cocoformat.json'))

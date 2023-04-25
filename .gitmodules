@@ -1,0 +1,3 @@
+[submodule "tools/evaluation/TrackEval"]
+	path = tools/evaluation/TrackEval
+	url = https://github.com/thanhtvt/TrackEval.git

@@ -1,6 +1,5 @@
 import os
 import os.path as osp
-import tempfile
 from argparse import ArgumentParser
 
 import cv2
@@ -29,18 +28,6 @@ def parse_args():
     return args
 
 
-def draw_image(pose, img):
-    color = (100, 255, 100)
-    thickness = 2
-    for k in range(len(pose)):
-        landmarks = pose[k].pred_instances.keypoints.reshape(-1, 2)
-        for i in range(landmarks.shape[0]):
-            center_coordinates = (int(landmarks[i][0]), int(landmarks[i][1]))
-            radius = 2
-            img = cv2.circle(img, center_coordinates, radius, color, thickness)
-    return img
-
-
 def main(args):
     assert args.output
     # load images
@@ -59,6 +46,7 @@ def main(args):
     if args.output is not None:
         if args.output.endswith('.mp4'):
             OUT_VIDEO = True
+            os.makedirs(osp.dirname(args.output), exist_ok=True)
         else:
             out_path = args.output
             os.makedirs(out_path, exist_ok=True)
@@ -75,6 +63,7 @@ def main(args):
 
     # build the model from a config file and a checkpoint file
     model = init_model(args.config, args.checkpoint, device=args.device)
+    data_pipeline = model.cfg.test_pipeline[2:]
 
     prog_bar = mmengine.ProgressBar(len(imgs))
     # test and show/save the images
@@ -92,7 +81,8 @@ def main(args):
             batch_frame_ids.append(frame_id_cnt)
             frame_id_cnt += 1
 
-        results = batch_inference_mot(model, batched_imgs, batch_frame_ids)
+        results = batch_inference_mot(model, batched_imgs, batch_frame_ids,
+                                      data_pipeline)
         outputs.extend(results)
 
         prog_bar.update(len(results))
@@ -103,18 +93,15 @@ def main(args):
         height, width = outputs[0].metainfo['ori_shape']
         vwriter = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'mp4v'),
                                   fps, (width, height))
+
     for result in outputs:
         frame_id = result.metainfo['frame_id']
-        out_img = draw_tracked_instances(imgs[frame_id], result)
-
-        if args.vis_pose:
-            pose_result = result.pred_track_instances.pose
-            out_img = draw_image(pose_result, out_img)
-
+        out_img = draw_tracked_instances(imgs[frame_id], result, args.vis_pose)
         if OUT_VIDEO:
             vwriter.write(out_img)
         else:
             mmcv.imwrite(out_img, osp.join(out_path, f'{frame_id:06d}.jpg'))
+
     if OUT_VIDEO:
         vwriter.release()
 

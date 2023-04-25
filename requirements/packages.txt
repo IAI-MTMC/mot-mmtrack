@@ -1,9 +1,11 @@
 gdown
 git+https://github.com/JonathonLuiten/TrackEval.git
-mmcls>=1.0.0rc0
+mmcls==1.0.0rc5
 mmcv>=2.0.0rc1
-mmdet>=3.0.0rc0,<3.0.0rc6
+mmdet==3.0.0rc5
 mmengine>=0.1.0
-mmpose>=1.0.0rc0
+mmpose==1.0.0rc0
+mmyolo==0.4.0
+numpy==1.23.1
 tensorboard
 torchreid

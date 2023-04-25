@@ -66,9 +66,9 @@ class MyBaseReID(ImageClassifier):
         outputs = self.backbone(imgs)[0]
         print(outputs.shape)
 
-        import torch.nn.functional as F
-        import numpy as np
         import cv2
+        import numpy as np
+        import torch.nn.functional as F
 
         # compute activation maps
         outputs = (outputs**2).sum(1)

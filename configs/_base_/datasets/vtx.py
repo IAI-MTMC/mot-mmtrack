@@ -39,7 +39,7 @@ test_cfg = dict(type='TestLoop')
 
 # evaluator
 val_evaluator = dict(
-    type='MOTChallengeMetrics', 
+    type='MOTChallengeMetrics',
     metric=['HOTA', 'CLEAR', 'Identity'],
     postprocess_tracklet_cfg=[
         dict(type='InterpolateTracklets', min_num_frames=5, max_num_frames=20)

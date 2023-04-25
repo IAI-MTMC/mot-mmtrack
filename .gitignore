@@ -114,7 +114,7 @@ ckpts
 *.pkl
 *.pkl.json
 *.log.json
-*.pth.tar-5
+*.pth.tar*
 work_dirs/
 mmtrack/.mim
 

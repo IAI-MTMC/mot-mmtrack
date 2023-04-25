@@ -17,11 +17,13 @@ def _random_color(seed):
 
 def draw_tracked_instances(image: np.ndarray,
                            track_sample: TrackDataSample,
+                           vis_pose: bool = False,
                            thickness: int = 2):
     """
     Args:
         image (np.ndarray): The image to draw on.
         track_sample (TrackDataSample): The track sample to draw.
+        vis_pose (bool): Whether to draw the pose. Default: False.
         thickness (int): The thickness of the lines.
 
     Returns:
@@ -33,6 +35,7 @@ def draw_tracked_instances(image: np.ndarray,
     font_scale = min(image.shape[0], image.shape[1]) * 5e-4
     font_thickness = 1
     text_padding = 1
+    keypoint_radius = 2
 
     pred_track_instances = track_sample.pred_track_instances
     boxes = pred_track_instances.bboxes
@@ -55,10 +58,19 @@ def draw_tracked_instances(image: np.ndarray,
         (text_w, text_h), _ = cv2.getTextSize(label, font, font_scale,
                                               font_thickness)
         cv2.rectangle(image,
-                      (box[0] - text_padding, box[1] - text_h - text_padding),
+                      (box[0] - text_padding, box[1] + text_h + text_padding),
                       (box[0] + text_w + text_padding, box[1] + text_padding),
                       color, -1)
-        cv2.putText(image, label, (box[0], box[1]), font, font_scale,
+        cv2.putText(image, label, (box[0], box[1] + text_h), font, font_scale,
                     (255, 255, 255), font_thickness, cv2.LINE_AA)
+
+    if vis_pose:
+        pose_results = pred_track_instances.pose
+        for pose_result, color in zip(pose_results, colors):
+            landmarks = pose_result.pred_instances.keypoints.reshape(-1, 2)
+            for keypoint in landmarks:
+                center_coordinates = (int(keypoint[0]), int(keypoint[1]))
+                image = cv2.circle(image, center_coordinates, keypoint_radius,
+                                   color, thickness)
 
     return image

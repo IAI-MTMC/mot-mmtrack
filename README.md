@@ -4,8 +4,8 @@ To setup `mot-mmtrack`, run the following command:
 
 ```bash
 conda create -n mot-mmtrack python=3.10
-pip install torch torchvision
-# or install with conda `conda install pytorch torchvision pytorch-cuda=11.7 -c pytorch -c nvidia`
+pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
+# or install with conda `conda install pytorch==1.13.1 torchvision==0.14.1 pytorch-cuda=11.7 -c pytorch -c nvidia`
 pip install openmim
 mim install -r requirements/packages.txt
 pip install -v -e .
