@@ -1,41 +1,46 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 from mmengine.dataset import Compose
-from mmpose.datasets.transforms import LoadImage, GetBBoxCenterScale, PackPoseInputs
+from mmpose.datasets.transforms import (GetBBoxCenterScale, LoadImage,
+                                        PackPoseInputs)
+
 from .pose_embedding import FullBodyPoseEmbedder
 
+
 class PosePipeline:
+
     def __init__(self):
         self.pose_embedder = FullBodyPoseEmbedder()
         self.pose_pipeline = Compose(
             [LoadImage(),
              GetBBoxCenterScale(padding=1.0),
              PackPoseInputs()])
-    
+
     @property
     def embedding_size():
         return 46
 
     def prepare_pose_data(self, img, bboxes, scores, crops):
-            print('prepare_pose_data')
-            pose_data = []
+        print('prepare_pose_data')
+        pose_data = []
 
-            for bbox, score, crop in zip(bboxes, scores, crops):
-                data = self.pose_pipeline(dict(img=img,
-                                            bbox=bbox[None]))  # shape (1, 4)
-                pds = data['data_samples']
-                pds.gt_instances.bbox_scores = score.reshape(1)
-                pds.set_field(
-                    (crop.shape[2], crop.shape[1]),  # w, h
-                    'input_size',
-                    field_type='metainfo')
-                pds.set_field(
-                    (0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15),
-                    'flip_indices',
-                    field_type='metainfo')
+        for bbox, score, crop in zip(bboxes, scores, crops):
+            data = self.pose_pipeline(dict(img=img,
+                                           bbox=bbox[None]))  # shape (1, 4)
+            pds = data['data_samples']
+            pds.gt_instances.bbox_scores = score.reshape(1)
+            pds.set_field(
+                (crop.shape[2], crop.shape[1]),  # w, h
+                'input_size',
+                field_type='metainfo')
+            pds.set_field(
+                (0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15),
+                'flip_indices',
+                field_type='metainfo')
 
-                pose_data.append(pds)
-            return pose_data
-    
+            pose_data.append(pds)
+        return pose_data
+
     def draw_img(self, bboxes, img, pose_results):
         print('draw_img')
         import cv2
@@ -81,7 +86,7 @@ class PosePipeline:
         pose_results = pose_estimator.predict(crops, pose_data)
         # self.draw_img(bboxes_scale, img, pose_results)
 
-        pose_embedded = self.pose_embbedder(pose_results, bboxes_scale)
+        pose_embedded = self.pose_embedder(pose_results, bboxes_scale)
 
         for k in range(len(pose_results)):
             keypoints = pose_results[k].pred_instances.keypoints[0]

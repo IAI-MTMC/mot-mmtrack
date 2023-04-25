@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 import torch
 
@@ -31,8 +32,7 @@ class FullBodyPoseEmbedder(object):
         ]
 
     def embbed(self, landmarks):
-        """
-        Normalizes pose landmarks and converts to embedding
+        """Normalizes pose landmarks and converts to embedding.
 
         Args:
           landmarks - NumPy array with 3D landmarks of shape (N, 3).
@@ -135,7 +135,7 @@ class FullBodyPoseEmbedder(object):
         """Converts pose landmarks into 3D embedding.
 
         We use several pairwise 3D distances to form pose embedding. All distances
-        include X and Y components with sign. We differnt types of pairs to cover
+        include X and Y components with sign. We different types of pairs to cover
         different pose classes. Feel free to remove some or add new.
 
         Args:

@@ -47,8 +47,8 @@ def draw_image(pose, bboxes, img, frame_id):
     for k in range(len(bboxes)):
         landmarks = pose[k].pred_instances.keypoints.reshape(-1, 2)
         frame['objects'].append({
-            "bbox": bboxes[k],
-            "pose": landmarks.tolist()
+            'bbox': bboxes[k],
+            'pose': landmarks.tolist()
         })
     return frame
 
@@ -118,7 +118,7 @@ def main(args):
     prog_bar = mmengine.ProgressBar(len(imgs))
     # test and show/save the images
 
-    json_result = {"camera_id": "S01", "frames": []}
+    json_result = {'camera_id': 'S01', 'frames': []}
     for i, img in enumerate(imgs):
         if isinstance(img, str):
             img_path = osp.join(args.input, img)
@@ -162,7 +162,7 @@ def main(args):
     json_result = json.dumps(json_result)
     print(json_result)
 
-    with open("test.json", "w") as outfile:
+    with open('test.json', 'w') as outfile:
         outfile.write(json_result)
 
     if args.output and OUT_VIDEO:

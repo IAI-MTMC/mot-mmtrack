@@ -7,21 +7,22 @@ from torch import Tensor
 
 
 def expanse_bbox(bboxes: torch.Tensor, biou: float):
-        w = bboxes[:, 2] - bboxes[:, 0]
-        h = bboxes[:, 3] - bboxes[:, 1]
+    w = bboxes[:, 2] - bboxes[:, 0]
+    h = bboxes[:, 3] - bboxes[:, 1]
 
-        w_center = (bboxes[:, 2] + bboxes[:, 0]) / 2
-        h_center = (bboxes[:, 3] + bboxes[:, 1]) / 2
+    w_center = (bboxes[:, 2] + bboxes[:, 0]) / 2
+    h_center = (bboxes[:, 3] + bboxes[:, 1]) / 2
 
-        w_expanse = (2 * biou + 1) * w
-        h_expanse = (2 * biou + 1) * h
+    w_expanse = (2 * biou + 1) * w
+    h_expanse = (2 * biou + 1) * h
 
-        return torch.stack((
-            (w_center - w_expanse / 2),
-            (h_center - h_expanse / 2),
-            (w_center + w_expanse / 2),
-            (h_center + h_expanse / 2),
-        ), dim=1)
+    return torch.stack((
+        (w_center - w_expanse / 2),
+        (h_center - h_expanse / 2),
+        (w_center + w_expanse / 2),
+        (h_center + h_expanse / 2),
+    ),
+                       dim=1)
 
 
 def quad2bbox_cxcywh(quad: torch.Tensor):

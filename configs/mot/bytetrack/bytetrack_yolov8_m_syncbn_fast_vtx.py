@@ -9,7 +9,8 @@ model = dict(
         bbox_head=dict(head_module=dict(num_classes=1)),
         init_cfg=dict(
             type='Pretrained',
-            checkpoint='work_dirs/yolov8_m_syncbn_fast_1xb16-10e_vtx/epoch_10.pth')),
+            checkpoint=
+            'work_dirs/yolov8_m_syncbn_fast_1xb16-10e_vtx/epoch_10.pth')),
     motion=dict(type='KalmanFilter'),
     tracker=dict(
         type='ByteTracker',
@@ -20,5 +21,4 @@ model = dict(
         num_frames_retain=30))
 
 test_dataloader = dict(
-    dataset=dict(
-        ann_file='annotations/crowd_val_cocoformat.json'))
+    dataset=dict(ann_file='annotations/crowd_val_cocoformat.json'))

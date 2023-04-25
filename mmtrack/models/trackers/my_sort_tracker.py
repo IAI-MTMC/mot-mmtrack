@@ -8,16 +8,13 @@ from mmengine.structures import InstanceData
 from motmetrics.lap import linear_sum_assignment
 from torch import Tensor
 
+from mmtrack.models.pose import PosePipeline
 from mmtrack.registry import MODELS
-from mmtrack.structures.bbox.transforms import bbox_cxcyah_to_xyxy
 from mmtrack.structures import TrackDataSample
 from mmtrack.structures.bbox import bbox_xyxy_to_cxcyah, expanse_bbox
+from mmtrack.structures.bbox.transforms import bbox_cxcyah_to_xyxy
 from mmtrack.utils import OptConfigType, imrenormalize
 from .base_tracker import BaseTracker
-
-import numpy as np
-from mmtrack.models.pose import PosePipeline
-
 
 
 @MODELS.register_module()
@@ -50,7 +47,8 @@ class MySORTTracker(BaseTracker):
                      num_samples=10,
                      img_scale=(256, 128),
                      img_norm_cfg=None,
-                     match_score_thr=2.0),
+                     match_score_thr=2.0,
+                     return_embedding=False),
                  match_iou_thr: float = 0.7,
                  num_tentatives: int = 3,
                  biou: int = None,
@@ -186,7 +184,7 @@ class MySORTTracker(BaseTracker):
                             crops, mode='tensor', frame_id=frame_id)
                         embeds = torch.cat((embeds, embeds_reid), dim=1)
                     if self.reid.get('pose', None):
-                        pose_results, pose_embedded = self.get_pose_embedded(
+                        pose_results, pose_embedded = self.pose_pipeline.get_pose_embedded(
                             bboxes.clone(), scores.clone(), metainfo, reid_img,
                             crops, model.pose)
                         embeds = torch.cat(
@@ -198,7 +196,8 @@ class MySORTTracker(BaseTracker):
                             (0, model.reid.head.out_channels))
                         embeds = torch.cat((embeds, embeds_reid), dim=1)
                     if self.reid.get('pose', None):
-                        pose_embedded = crops.new_zeros((0, self.pose_pipeline.embedding_size))
+                        pose_embedded = crops.new_zeros(
+                            (0, self.pose_pipeline.embedding_size))
                         pose_results = []
                         embeds = torch.cat(
                             (embeds, pose_embedded.to(embeds.device)), dim=1)
@@ -374,7 +373,9 @@ class MySORTTracker(BaseTracker):
         pred_track_instances.labels = labels
         pred_track_instances.scores = scores
         pred_track_instances.instances_id = ids
-        pred_track_instances.pose = pose_results if self.with_reid and self.reid.get(
-            'pose', None) else None
+        if self.with_reid and self.reid.get('pose', False):
+            pred_track_instances.pose = pose_results
+        if self.with_reid and self.reid.get('return_embedding', False):
+            pred_track_instances.embeds = embeds
 
         return pred_track_instances

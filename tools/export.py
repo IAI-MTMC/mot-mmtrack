@@ -4,6 +4,7 @@ import os.path as osp
 from argparse import ArgumentParser
 from typing import Any, List, Optional
 
+from mlops.database import init_mot_exporter
 from mmcv import VideoReader, imread
 from mmengine import dump, load
 from mmengine.config import Config, DictAction
@@ -13,7 +14,6 @@ from mmtrack.apis import batch_inference_mot
 from mmtrack.registry import MODELS
 from mmtrack.utils import register_all_modules
 
-from mlops.database import init_mot_exporter
 MOT_EXPORTER = init_mot_exporter()
 
 
@@ -26,7 +26,11 @@ def parse_args():
     parser.add_argument('--checkpoint', help='checkpoint file')
     parser.add_argument('--device', default='cuda:0', help='device')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
-    parser.add_argument('--max-storage', type=int, default=100, help='Max documents to store before push to database')
+    parser.add_argument(
+        '--max-storage',
+        type=int,
+        default=100,
+        help='Max documents to store before push to database')
     parser.add_argument(
         '--error-analysis', action='store_true', help='run error analysis')
     parser.add_argument(
@@ -125,10 +129,11 @@ def main(args):
         for vid_info in pbar:
             pbar.set_description(f"Processing {vid_info['name']}")
 
-            scene_id, duration_id, camera_id = map(int, vid_info['name'].split('/'))
+            scene_id, duration_id, camera_id = map(int,
+                                                   vid_info['name'].split('/'))
             frames = get_frames(data_cfg.data_root, vid_info['name'],
                                 data_cfg.data_prefix.img_path)
-            
+
             data_iter = iter(frames)
             frame_id_cnt = 0
             done = False
@@ -147,50 +152,56 @@ def main(args):
                     except StopIteration:
                         done = True
                         break
-                batched_res = batch_inference_mot(model, batched_frames, frame_ids,
-                                                data_pipeline)
-                
+                batched_res = batch_inference_mot(model, batched_frames,
+                                                  frame_ids, data_pipeline)
+
                 for track_result in batched_res:
                     track_ids = track_result.pred_track_instances.instances_id  # type: ignore
                     track_bboxes = track_result.pred_track_instances.bboxes  # type: ignore
                     track_scores = track_result.pred_track_instances.scores  # type: ignore
                     track_embeds = track_result.pred_track_instances.embeds  # type: ignore
-                    assert track_embeds is not None, "Embedding is not available"
+                    assert track_embeds is not None, 'Embedding is not available'
 
                     # Convert bbox to xywh format
                     track_bboxes[:, 2] -= track_bboxes[:, 0]
                     track_bboxes[:, 3] -= track_bboxes[:, 1]
 
                     for track_id, track_bbox, track_score, track_embed in zip(
-                            track_ids, track_bboxes, track_scores, track_embed):
+                            track_ids, track_bboxes, track_scores,
+                            track_embeds):
                         data_storage.append({
-                            "code_version": code_name,
-                            "scene_id": scene_id,
-                            "duration_id": duration_id,
-                            "stream_id": camera_id,
-                            "frame_number": track_result.metainfo['frame_id'] + 1,
-                            "object": {
-                                "box": {
-                                    "x": track_bbox[0].item(),
-                                    "y": track_bbox[1].item(),
-                                    "w": track_bbox[2].item(),
-                                    "h": track_bbox[3].item(),
+                            'code_version':
+                            code_name,
+                            'scene_id':
+                            scene_id,
+                            'duration_id':
+                            duration_id,
+                            'stream_id':
+                            camera_id,
+                            'frame_number':
+                            track_result.metainfo['frame_id'] + 1,
+                            'object': {
+                                'box': {
+                                    'x': track_bbox[0].item(),
+                                    'y': track_bbox[1].item(),
+                                    'w': track_bbox[2].item(),
+                                    'h': track_bbox[3].item(),
                                 },
-                                "object_id": track_id.item(),
-                                "confidence": track_score.item(),
-                                "embedding": track_embed.tolist(),
+                                'object_id': track_id.item(),
+                                'confidence': track_score.item(),
+                                'embedding': track_embed.tolist(),
                             }
                         })
 
                         if len(data_storage) > args.max_storage:
                             MOT_EXPORTER.export(data_storage)
-                            print(f"Exported {len(data_storage)} data")
+                            print(f'Exported {len(data_storage)} data')
                             data_storage.clear()
 
             if len(data_storage) > 0:
-                            MOT_EXPORTER.export(data_storage)
-                            print(f"Exported {len(data_storage)} data")
-                            data_storage.clear()
+                MOT_EXPORTER.export(data_storage)
+                print(f'Exported {len(data_storage)} data')
+                data_storage.clear()
 
 
 if __name__ == '__main__':

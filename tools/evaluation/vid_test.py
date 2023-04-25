@@ -28,7 +28,8 @@ def parse_args():
     parser.add_argument('--checkpoint', help='checkpoint file')
     parser.add_argument('--device', default='cuda:0', help='device')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
-    parser.add_argument('--no-cache', action='store_true', help='run evaluation without cache')
+    parser.add_argument(
+        '--no-cache', action='store_true', help='run evaluation without cache')
     parser.add_argument(
         '--error-analysis', action='store_true', help='run error analysis')
     parser.add_argument(

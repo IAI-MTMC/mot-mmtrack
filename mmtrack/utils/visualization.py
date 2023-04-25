@@ -70,7 +70,7 @@ def draw_tracked_instances(image: np.ndarray,
             landmarks = pose_result.pred_instances.keypoints.reshape(-1, 2)
             for keypoint in landmarks:
                 center_coordinates = (int(keypoint[0]), int(keypoint[1]))
-                image = cv2.circle(image, center_coordinates, keypoint_radius, color,
-                                   thickness)
+                image = cv2.circle(image, center_coordinates, keypoint_radius,
+                                   color, thickness)
 
     return image

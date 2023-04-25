@@ -28,8 +28,7 @@ def osnet_x1_0(num_classes=1000,
 @MODELS.register_module()
 class MyReID(BaseModel):
 
-    def __init__(self, model_name: str, model_path: str,
-                 feature_dim: int):
+    def __init__(self, model_name: str, model_path: str, feature_dim: int):
         super().__init__()
 
         pretrained = (model_path and check_isfile(model_path))
@@ -73,21 +72,22 @@ class MyReID(BaseModel):
         #     img = img.detach().moveaxis(0, -1).cpu().numpy()
         #     img = img * std + mean
         #     img_path = 'images/image_' + str(frame_id) + '_' + str(i) + '.jpg'
-            # cv2.imwrite(img_path, img[..., ::-1])
+        # cv2.imwrite(img_path, img[..., ::-1])
 
         # print('crop images: ', inputs.shape)
 
         # self.test_reid()
-        assert mode == 'tensor', "Only support tensor mode"
+        assert mode == 'tensor', 'Only support tensor mode'
         features = self.model(inputs)
         return features
 
     def test_reid(self):
         print('------------ test -----------')
-        import torch
         import glob
+
         import cv2
-        from torchvision.transforms import Resize, Compose, ToTensor, Normalize
+        import torch
+        from torchvision.transforms import Compose, Normalize, Resize, ToTensor
 
         transform = Compose([
             ToTensor(),
