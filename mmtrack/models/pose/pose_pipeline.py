@@ -17,7 +17,7 @@ class PosePipeline:
              PackPoseInputs()])
 
     @property
-    def embedding_size():
+    def embedding_size(self):
         return 46
 
     def prepare_pose_data(self, img, bboxes, scores, crops):

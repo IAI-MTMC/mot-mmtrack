@@ -28,7 +28,8 @@ def osnet_x1_0(num_classes=1000,
 @MODELS.register_module()
 class MyReID(BaseModel):
 
-    def __init__(self, model_name: str, model_path: str, feature_dim: int):
+    def __init__(self, model_name: str, model_path: str, device: str,
+                 feature_dim: int):
         super().__init__()
 
         pretrained = (model_path and check_isfile(model_path))
@@ -36,7 +37,8 @@ class MyReID(BaseModel):
             num_classes=1,
             pretrained=not pretrained,
             loss='triplet',
-            feature_dim=feature_dim)
+            feature_dim=feature_dim,
+            use_gpu=device.startswith('cuda'))
         self.model.eval()
         if pretrained:
             load_pretrained_weights(self.model, model_path)

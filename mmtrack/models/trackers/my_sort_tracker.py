@@ -179,11 +179,11 @@ class MySORTTracker(BaseTracker):
                 if crops.size(0) > 0:
                     embeds = torch.zeros((crops.shape[0], 0),
                                          device=crops.device)
-                    if self.reid.get('reid', None):
+                    if self.reid.get('reid', False):
                         embeds_reid = model.reid(
                             crops, mode='tensor', frame_id=frame_id)
                         embeds = torch.cat((embeds, embeds_reid), dim=1)
-                    if self.reid.get('pose', None):
+                    if self.reid.get('pose', False):
                         pose_results, pose_embedded = self.pose_pipeline.get_pose_embedded(
                             bboxes.clone(), scores.clone(), metainfo, reid_img,
                             crops, model.pose)
@@ -191,11 +191,11 @@ class MySORTTracker(BaseTracker):
                             (embeds, pose_embedded.to(embeds.device)), dim=1)
                 else:
                     embeds = torch.zeros((0, 0), device=crops.device)
-                    if self.reid.get('reid', None):
+                    if self.reid.get('reid', False):
                         embeds_reid = crops.new_zeros(
                             (0, model.reid.head.out_channels))
                         embeds = torch.cat((embeds, embeds_reid), dim=1)
-                    if self.reid.get('pose', None):
+                    if self.reid.get('pose', False):
                         pose_embedded = crops.new_zeros(
                             (0, self.pose_pipeline.embedding_size))
                         pose_results = []
@@ -237,12 +237,12 @@ class MySORTTracker(BaseTracker):
                                        rescale)
 
                 embeds = torch.zeros((crops.shape[0], 0), device=crops.device)
-                if self.reid.get('reid', None):
+                if self.reid.get('reid', False):
                     embeds_reid = model.reid(
                         crops, mode='tensor', frame_id=frame_id)
                     embeds = torch.cat((embeds, embeds_reid), dim=1)
 
-                if self.reid.get('pose', None):
+                if self.reid.get('pose', False):
                     pose_results, pose_embedded = self.pose_pipeline.get_pose_embedded(
                         bboxes.clone(), scores.clone(), metainfo, reid_img,
                         crops, model.pose)
@@ -374,7 +374,8 @@ class MySORTTracker(BaseTracker):
         pred_track_instances.instances_id = ids
         if self.with_reid and self.reid.get('pose', False):
             pred_track_instances.pose = pose_results
-        if self.with_reid and self.reid.get('return_embedding', False):
+        if self.with_reid and self.reid.get('reid', False) and self.reid.get(
+                'return_embedding', False):
             pred_track_instances.embeds = embeds
 
         return pred_track_instances

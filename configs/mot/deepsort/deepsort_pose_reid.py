@@ -71,3 +71,5 @@ model = dict(
         momentums=None,
         num_tentatives=2,
         num_frames_retain=100))
+
+test_dataloader = dict(dataset=dict(ann_file='sparse_val_cocoformat.json'))
