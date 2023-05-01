@@ -32,6 +32,12 @@ class DeepByteTracker(BaseTracker):
             - low (float): Threshold of the second matching. Defaults to 0.5.
             - tentative (float): Threshold of the matching for tentative
                 tracklets. Defaults to 0.3.
+        weight_assoc_embed (float): Weight of association embedding. Defaults to 0.75.
+        embed_cost_diff_limit (float): Threshold param for adaptive embedding weight.
+            Defaults to 0.5.
+        embed_momentum_factor (float): Momentum factor for embedding update.
+            Defaults to 0.95.
+        update_embed_thr (float): Threshold of the confidence for updating embedding. Defaults to 0.6.
         num_tentatives (int, optional): Number of continuous frames to confirm
             a track. Defaults to 3.
     """
@@ -40,15 +46,13 @@ class DeepByteTracker(BaseTracker):
                  obj_score_thrs: dict = dict(high=0.6, low=0.1),
                  init_track_thr: float = 0.7,
                  reid: dict = dict(
-                     num_samples=10,
-                     img_scale=(256, 128),
-                     img_norm_cfg=None),
+                     num_samples=10, img_scale=(256, 128), img_norm_cfg=None),
                  weight_iou_with_det_scores: bool = True,
                  match_iou_thrs: dict = dict(high=0.1, low=0.5, tentative=0.3),
                  weight_assoc_embed: float = 0.75,
                  embed_cost_diff_limit: float = 0.5,
-                 embed_momentum_factor: float = 0.5,
-                 update_embed_thr: float = 0.5,
+                 embed_momentum_factor: float = 0.95,
+                 update_embed_thr: float = 0.6,
                  num_tentatives: int = 3,
                  **kwargs):
         super().__init__(**kwargs)
@@ -102,8 +106,8 @@ class DeepByteTracker(BaseTracker):
                 m = self.momentums[k]
                 scores = obj[self.memo_items.index('scores')]
 
-                trust = (scores - self.update_embed_thr) / (
-                    1 - self.update_embed_thr)
+                trust = (scores -
+                         self.update_embed_thr) / (1 - self.update_embed_thr)
                 m = m + (1 - m) * (1 - trust)
                 self.tracks[id][k] = m * self.tracks[id][k] + (1 - m) * v
             else:
@@ -144,31 +148,55 @@ class DeepByteTracker(BaseTracker):
         # Needs two columns at least to make sense to boost
         if embed_costs.size(1) >= 2:
             for i in range(embed_costs.size(0)):
-                inds = torch.argsort(-embed_costs[i])
+                inds = torch.argsort(embed_costs[i], descending=True)
                 # Row weight is difference between top / second top
-                row_weight = 1 - max((embed_costs[i, inds[1]] / embed_costs[i, inds[0]]) - max_diff, 0) / (1 - max_diff)
+                if embed_costs[i, inds[0]] == 0:
+                    row_weight = 0
+                else:
+                    row_weight = 1 - max(
+                        (embed_costs[i, inds[1]] / embed_costs[i, inds[0]]) -
+                        max_diff,
+                        0,
+                    ) / (1 - max_diff)
                 # Add to row
                 w_emb[i] *= row_weight
 
         if embed_costs.size(0) >= 2:
             for j in range(embed_costs.size(1)):
-                inds = torch.argsort(embed_costs[:, j])
-                # Row weight is difference between top / second top
-                col_weight = 1 - max((embed_costs[inds[1], j] / embed_costs[inds[0], j]) - max_diff, 0) / (1 - max_diff)
-                # Add to row
+                inds = torch.argsort(embed_costs[:, j], descending=True)
+                # Col weight is difference between top / second top
+                if embed_costs[inds[0], j] == 0:
+                    col_weight = 0
+                else:
+                    col_weight = 1 - max(
+                        (embed_costs[inds[1], j] / embed_costs[inds[0], j]) -
+                        max_diff, 0) / (1 - max_diff)
+                # Add to col
                 w_emb[:, j] *= col_weight
-
+        print('COST', embed_costs.max(), embed_costs.mean())
+        print('W_EMB', w_emb.max(), w_emb.mean())
         return w_emb
 
+    def compute_embed_similarity(self, track_embeds: torch.Tensor,
+                                 det_embeds: torch.Tensor):
+        eps = 1e-8
+        track_embeds /= torch.clamp_min_(
+            track_embeds.norm(dim=1, keepdim=True), eps)
+        det_embeds /= torch.clamp_min_(
+            det_embeds.norm(dim=1, keepdim=True), eps)
+        embed_costs = torch.mm(track_embeds, det_embeds.t())
+
+        return embed_costs
+
     def assign_ids(
-            self,
-            ids: List[int],
-            det_bboxes: torch.Tensor,
-            det_labels: torch.Tensor,
-            det_scores: torch.Tensor,
-            det_embeds: Optional[torch.Tensor] = None,
-            weight_iou_with_det_scores: Optional[bool] = False,
-            match_iou_thr: Optional[float] = 0.5
+        self,
+        ids: List[int],
+        det_bboxes: torch.Tensor,
+        det_labels: torch.Tensor,
+        det_scores: torch.Tensor,
+        det_embeds: Optional[torch.Tensor] = None,
+        weight_iou_with_det_scores: Optional[bool] = False,
+        match_iou_thr: Optional[float] = 0.5,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Assign ids.
 
@@ -206,16 +234,15 @@ class DeepByteTracker(BaseTracker):
                 track_embeds = torch.cat([
                     self.tracks[id]['embeds'] for id in ids
                 ]).to(det_embeds.device)
-                embed_costs = torch.cosine_similarity(track_embeds, det_embeds)
+                embed_sims = self.compute_embed_similarity(
+                    track_embeds, det_embeds)
+                embed_sims[ious <= 0] = 0
                 weighted_matrix = self.compute_aw_matrix(
-                    embed_costs, 
-                    self.weight_assoc_embed, 
+                    embed_sims, self.weight_assoc_embed,
                     self.embed_cost_diff_limit)
-                embed_costs *= weighted_matrix
-
-                embed_costs = embed_costs.cpu().numpy()
+                embed_sims *= weighted_matrix
             else:
-                embed_costs = 0
+                embed_sims = 0
 
             # support multi-class association
             track_labels = torch.tensor([
@@ -225,26 +252,27 @@ class DeepByteTracker(BaseTracker):
             # to avoid det and track of different categories are matched
             cate_cost = (1 - cate_match.int()) * 1e6
 
-            final_costs = -(ious + embed_costs) + cate_cost.cpu().numpy()
-            cost, row, col = lap.lapjv(final_costs)
-
-            # filter out matches with low IoU
+            final_costs = -(ious + embed_sims) + cate_cost
+            cost, row, col = lap.lapjv(
+                final_costs.cpu().numpy(), extend_cost=True)
+            # import pdb; pdb.set_trace()
             for track_idx in range(len(row)):
                 if track_idx != -1:
                     matched_det_idx = row[track_idx]
-                    if ious[track_idx, matched_det_idx] < match_iou_thr:
+                    if (matched_det_idx != -1 and
+                            ious[track_idx, matched_det_idx] < match_iou_thr):
                         row[track_idx] = -1
                         col[matched_det_idx] = -1
         else:
-            row = np.zeros(len(ids)).astype(np.int32) - 1
-            col = np.zeros(len(det_bboxes)).astype(np.int32) - 1
+            row = np.full(len(ids), -1).astype(np.int32)
+            col = np.full(len(det_bboxes), -1).astype(np.int32)
 
         return row, col
 
-    def track(self, 
-              model: torch.nn.Module, 
+    def track(self,
+              model: torch.nn.Module,
               img: torch.Tensor,
-              feats: List[torch.Tensor], 
+              feats: List[torch.Tensor],
               data_sample: TrackDataSample,
               data_preprocessor: OptConfigType = None,
               rescale: bool = False,
@@ -283,9 +311,10 @@ class DeepByteTracker(BaseTracker):
             img_norm_cfg = dict(
                 mean=data_preprocessor.get('mean', [0.0, 0.0, 0.0]),
                 std=data_preprocessor.get('std', [1.0, 1.0, 1.0]),
-                to_bgr=data_preprocessor.get('rgb_to_bgr', False))
+                to_bgr=data_preprocessor.get('rgb_to_bgr', False),
+            )
             reid_img = imrenormalize(img, img_norm_cfg,
-                                        self.reid['img_norm_cfg'])
+                                     self.reid['img_norm_cfg'])
         else:
             reid_img = img.clone()
 
@@ -299,8 +328,7 @@ class DeepByteTracker(BaseTracker):
                                self.num_tracks + num_new_tracks).to(labels)
             self.num_tracks += num_new_tracks
 
-            crops = self.crop_imgs(reid_img, metainfo, bboxes.clone(),
-                                    rescale)
+            crops = self.crop_imgs(reid_img, metainfo, bboxes.clone(), rescale)
             if crops.size(0) > 0:
                 embeds = model.reid(crops, mode='tensor')
             else:
@@ -311,7 +339,7 @@ class DeepByteTracker(BaseTracker):
                              -1,
                              dtype=labels.dtype,
                              device=labels.device)
-            
+
             crops = self.crop_imgs(reid_img, metainfo, bboxes.clone(), rescale)
             embeds = model.reid(crops, mode='tensor')
 
@@ -330,6 +358,7 @@ class DeepByteTracker(BaseTracker):
             second_det_labels = labels[second_det_inds]
             second_det_scores = scores[second_det_inds]
             second_det_ids = ids[second_det_inds]
+            second_det_embeds = embeds[second_det_inds]
 
             # 1. use Kalman Filter to predict current location
             for id in self.confirmed_ids:
@@ -342,13 +371,14 @@ class DeepByteTracker(BaseTracker):
 
             # 2. first match
             first_match_track_inds, first_match_det_inds = self.assign_ids(
-                self.confirmed_ids, 
-                first_det_bboxes, 
+                self.confirmed_ids,
+                first_det_bboxes,
                 first_det_labels,
-                first_det_scores, 
+                first_det_scores,
                 first_det_embeds,
                 self.weight_iou_with_det_scores,
-                self.match_iou_thrs['high'])
+                self.match_iou_thrs['high'],
+            )
             # '-1' mean a detection box is not matched with tracklets in
             # previous frame
             valid = first_match_det_inds > -1
@@ -359,25 +389,28 @@ class DeepByteTracker(BaseTracker):
             first_match_det_labels = first_det_labels[valid]
             first_match_det_scores = first_det_scores[valid]
             first_match_det_ids = first_det_ids[valid]
+            first_match_det_embeds = first_det_embeds[valid]
             assert (first_match_det_ids > -1).all()
 
             first_unmatch_det_bboxes = first_det_bboxes[~valid]
             first_unmatch_det_labels = first_det_labels[~valid]
             first_unmatch_det_scores = first_det_scores[~valid]
             first_unmatch_det_ids = first_det_ids[~valid]
+            first_unmatch_det_embeds = first_det_embeds[~valid]
             assert (first_unmatch_det_ids == -1).all()
 
             # 3. use unmatched detection bboxes from the first match to match
             # the unconfirmed tracks
             (tentative_match_track_inds,
              tentative_match_det_inds) = self.assign_ids(
-                 self.unconfirmed_ids, 
+                 self.unconfirmed_ids,
                  first_unmatch_det_bboxes,
-                 first_unmatch_det_labels, 
+                 first_unmatch_det_labels,
                  first_unmatch_det_scores,
                  None,
                  self.weight_iou_with_det_scores,
-                 self.match_iou_thrs['tentative'])
+                 self.match_iou_thrs['tentative'],
+             )
             valid = tentative_match_det_inds > -1
             first_unmatch_det_ids[valid] = torch.tensor(self.unconfirmed_ids)[
                 tentative_match_det_inds[valid]].to(labels)
@@ -393,13 +426,14 @@ class DeepByteTracker(BaseTracker):
                     first_unmatch_track_ids.append(id)
 
             second_match_track_inds, second_match_det_inds = self.assign_ids(
-                first_unmatch_track_ids, 
-                second_det_bboxes, 
+                first_unmatch_track_ids,
+                second_det_bboxes,
                 second_det_labels,
                 second_det_scores,
-                None, 
+                None,
                 False,
-                self.match_iou_thrs['low'])
+                self.match_iou_thrs['low'],
+            )
             valid = second_match_det_inds > -1
             second_det_ids[valid] = torch.tensor(first_unmatch_track_ids)[
                 second_match_det_inds[valid]].to(ids)
@@ -424,6 +458,10 @@ class DeepByteTracker(BaseTracker):
                             dim=0)
             ids = torch.cat((ids, second_det_ids[valid]), dim=0)
 
+            embeds = torch.cat(
+                (first_match_det_embeds, first_unmatch_det_embeds), dim=0)
+            embeds = torch.cat((embeds, second_det_embeds[valid]), dim=0)
+
             # 6. assign new ids
             new_track_inds = ids == -1
             ids[new_track_inds] = torch.arange(
@@ -437,7 +475,8 @@ class DeepByteTracker(BaseTracker):
             scores=scores,
             labels=labels,
             embeds=embeds,
-            frame_ids=frame_id)
+            frame_ids=frame_id,
+        )
 
         # update pred_track_instances
         pred_track_instances = InstanceData()

@@ -16,23 +16,23 @@ model = dict(
         bbox_head=dict(head_module=dict(num_classes=1)),
         test_cfg=dict(score_thr=0.01, nms=dict(type='nms', iou_threshold=0.7)),
         init_cfg=dict(
-            type='Pretrained', checkpoint='checkpoints/yolov8_m_syncbn_fast_1xb64_10e_vtx.pth')),
+            type='Pretrained', checkpoint='checkpoints/epoch_10.pth')),
     motion=dict(type='KalmanFilter', center_only=False),
     reid=dict(
         type='MyReID',
         model_name='osnet_x1_0',
-        model_path='checkpoints/reid/model.pth.tar-100',
+        model_path='checkpoints/model.pth.tar-100',
         feature_dim=512),
     tracker=dict(
         type='DeepByteTracker',
         obj_score_thrs=dict(high=0.6, low=0.1),
         init_track_thr=0.7,
-        weight_iou_with_det_scores=True,
+        weight_iou_with_det_scores=False,
         match_iou_thrs=dict(high=0.1, low=0.5, tentative=0.3),
         weight_assoc_embed=0.75,
         embed_cost_diff_limit=0.5,
-        embed_momentum_factor=0.5,
-        update_embed_thr=0.5,
+        embed_momentum_factor=0.95,
+        update_embed_thr=0.7,
         reid=dict(
             reid=True,
             num_samples=10,
