@@ -123,10 +123,11 @@ def run_vid_test(
             except StopIteration:
                 done = True
                 break
-        batched_res = batch_inference_mot(model, batched_frames, frame_ids,
-                                          data_pipeline)
 
-        outputs.extend(batched_res)
+        if not done:
+            batched_res = batch_inference_mot(model, batched_frames, frame_ids,
+                                              data_pipeline)
+            outputs.extend(batched_res)
 
         if len(outputs) % 100 == 0:
             print(f'Processed {len(outputs)} frames')

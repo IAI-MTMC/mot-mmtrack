@@ -129,8 +129,7 @@ def main(args):
         for vid_info in pbar:
             pbar.set_description(f"Processing {vid_info['name']}")
 
-            scene_id, duration_id, camera_id = map(int,
-                                                   vid_info['name'].split('/'))
+            scene_id, duration_id, camera_id = vid_info['name'].split('/')
             frames = get_frames(data_cfg.data_root, vid_info['name'],
                                 data_cfg.data_prefix.img_path)
 
@@ -175,9 +174,9 @@ def main(args):
                             'scene_id':
                             scene_id,
                             'duration_id':
-                            duration_id,
+                            int(duration_id),
                             'stream_id':
-                            camera_id,
+                            int(camera_id),
                             'frame_number':
                             track_result.metainfo['frame_id'] + 1,
                             'object': {
