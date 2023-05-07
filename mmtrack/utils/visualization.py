@@ -15,10 +15,13 @@ def _random_color(seed):
     return color
 
 
-def draw_tracked_instances(image: np.ndarray,
-                           track_sample: TrackDataSample,
-                           vis_pose: bool = False,
-                           thickness: int = 2):
+def draw_tracked_instances(
+    image: np.ndarray,
+    track_sample: TrackDataSample,
+    vis_pose: bool = False,
+    dataset_info: dict = None,
+    thickness: int = 2,
+):
     """
     Args:
         image (np.ndarray): The image to draw on.
@@ -35,7 +38,6 @@ def draw_tracked_instances(image: np.ndarray,
     font_scale = min(image.shape[0], image.shape[1]) * 5e-4
     font_thickness = 1
     text_padding = 1
-    keypoint_radius = 2
 
     pred_track_instances = track_sample.pred_track_instances
     boxes = pred_track_instances.bboxes
@@ -52,6 +54,7 @@ def draw_tracked_instances(image: np.ndarray,
 
     for box, label, color in zip(boxes, labels, colors):
         box = box.round().int().tolist()
+
         cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), color,
                       thickness)
 
@@ -65,12 +68,35 @@ def draw_tracked_instances(image: np.ndarray,
                     (255, 255, 255), font_thickness, cv2.LINE_AA)
 
     if vis_pose:
-        pose_results = pred_track_instances.pose
-        for pose_result, color in zip(pose_results, colors):
-            landmarks = pose_result.pred_instances.keypoints.reshape(-1, 2)
-            for keypoint in landmarks:
-                center_coordinates = (int(keypoint[0]), int(keypoint[1]))
-                image = cv2.circle(image, center_coordinates, keypoint_radius,
-                                   color, thickness)
+        image = visualize_pose(image, pred_track_instances.pose, dataset_info)
+
+    return image
+
+
+def visualize_pose(image, pose_results, dataset_info, thickness=1, radius=2):
+    keypoint_info = dataset_info.keypoint_info
+    skeleton_info = dataset_info.skeleton_info
+
+    for pose_result in pose_results:
+        landmarks = pose_result.pred_instances.keypoints.reshape(-1, 2)
+
+        # draw keypoint
+        for keypoint in keypoint_info.values():
+            id = keypoint['id']
+            color = keypoint['color']
+            keypoint = (int(landmarks[id][0]), int(landmarks[id][1]))
+            image = cv2.circle(image, keypoint, radius, color, thickness)
+
+        # draw skeleton
+        for skeleton in skeleton_info:
+            start_keypoint, end_keypoint = skeleton['link']
+            start_id = keypoint_info[start_keypoint]['id']
+            end_id = keypoint_info[end_keypoint]['id']
+
+            start_point = (int(landmarks[start_id][0]),
+                           int(landmarks[start_id][1]))
+            end_point = (int(landmarks[end_id][0]), int(landmarks[end_id][1]))
+            color = skeleton['color']
+            image = cv2.line(image, start_point, end_point, color, thickness)
 
     return image

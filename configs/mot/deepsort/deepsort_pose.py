@@ -52,18 +52,18 @@ model = dict(
         type='MySORTTracker',
         obj_score_thr=0.5,
         reid=dict(
-            pose=True,
-            reid=False,
-            num_samples=10,
             img_scale=(256, 128),
             img_norm_cfg=dict(
                 mean=[123.675, 116.28, 103.53],
                 std=[58.395, 57.12, 57.375],
                 to_rgb=True),  # Change channel order (1, 2, 3) -> (3, 2, 1)
-            match_score_thr=1.0),
+            pose=0.2,
+            num_samples_pose=1,
+            match_score_thr_pose=1.0),
         match_iou_thr=0.5,
         momentums=None,
         num_tentatives=2,
         num_frames_retain=100))
 
-test_dataloader = dict(dataset=dict(ann_file='sparse_val_cocoformat.json'))
+test_dataloader = dict(
+    dataset=dict(ann_file='annotations/sparse_val_cocoformat.json'))

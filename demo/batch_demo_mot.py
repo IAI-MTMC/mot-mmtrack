@@ -96,7 +96,8 @@ def main(args):
 
     for result in outputs:
         frame_id = result.metainfo['frame_id']
-        out_img = draw_tracked_instances(imgs[frame_id], result, args.vis_pose)
+        out_img = draw_tracked_instances(imgs[frame_id], result, args.vis_pose,
+                                         model.cfg.dataset_info)
         if OUT_VIDEO:
             vwriter.write(out_img)
         else:

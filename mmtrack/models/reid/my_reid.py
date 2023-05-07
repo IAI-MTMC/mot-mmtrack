@@ -58,30 +58,33 @@ class MyReID(BaseModel):
         return Head()
 
     def forward(self, inputs, mode: str = 'tensor', frame_id=-1):
-        # import os
-        # import cv2
-        # import numpy as np
-
-        # mean = np.array([[[123.675, 116.28, 103.53]]])
-        # std = np.array([[[58.395, 57.12, 57.375]]])
-
-        # try:
-        #     os.makedirs("images")
-        # except FileExistsError:
-        #     pass
-
-        # for i, img in enumerate(inputs):
-        #     img = img.detach().moveaxis(0, -1).cpu().numpy()
-        #     img = img * std + mean
-        #     img_path = 'images/image_' + str(frame_id) + '_' + str(i) + '.jpg'
-        # cv2.imwrite(img_path, img[..., ::-1])
-
-        # print('crop images: ', inputs.shape)
-
+        print('reid by osnet_x1_0')
+        self.visualize_crop_images(inputs, frame_id)
         # self.test_reid()
         assert mode == 'tensor', 'Only support tensor mode'
         features = self.model(inputs)
+        print('features:', features.shape)
         return features
+
+    def visualize_crop_images(self, inputs, frame_id):
+        import os
+        import cv2
+        import numpy as np
+
+        mean = np.array([[[123.675, 116.28, 103.53]]])
+        std = np.array([[[58.395, 57.12, 57.375]]])
+
+        try:
+            os.makedirs("images")
+        except FileExistsError:
+            pass
+
+        print('crop images: ', inputs.shape)
+        for i, img in enumerate(inputs):
+            img = img.detach().moveaxis(0, -1).cpu().numpy()
+            img = img * std + mean
+            img_path = 'images/image_' + str(frame_id) + '_' + str(i) + '.jpg'
+        cv2.imwrite(img_path, img[..., ::-1])
 
     def test_reid(self):
         print('------------ test -----------')

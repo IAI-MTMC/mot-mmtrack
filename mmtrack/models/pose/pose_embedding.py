@@ -31,7 +31,7 @@ class FullBodyPoseEmbedder(object):
             'right_ankle',
         ]
 
-    def embbed(self, landmarks):
+    def embed(self, landmarks):
         """Normalizes pose landmarks and converts to embedding.
 
         Args:
@@ -72,10 +72,10 @@ class FullBodyPoseEmbedder(object):
                 landmarks[i][0] = (w - w1) / (w2 - w1)
                 landmarks[i][1] = (h - h1) / (h2 - h1)
             # print(landmarks)
-            pose_embeddings.append(self.embbed(landmarks))
+            pose_embeddings.append(self.embed(landmarks))
 
         pose_embeddings = torch.from_numpy(np.stack(pose_embeddings, axis=0))
-        # print(pose_embeddings[0])
+        print('pose_embeddings:', pose_embeddings.shape)
         return pose_embeddings
 
     def _normalize_pose_landmarks(self, landmarks):
