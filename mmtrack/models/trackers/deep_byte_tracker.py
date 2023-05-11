@@ -177,16 +177,34 @@ class DeepByteTracker(BaseTracker):
         print('W_EMB', w_emb.max(), w_emb.mean())
         return w_emb
 
-    def compute_embed_similarity(self, track_embeds: torch.Tensor,
-                                 det_embeds: torch.Tensor):
-        eps = 1e-8
-        track_embeds /= torch.clamp_min_(
-            track_embeds.norm(dim=1, keepdim=True), eps)
-        det_embeds /= torch.clamp_min_(
-            det_embeds.norm(dim=1, keepdim=True), eps)
-        embed_costs = torch.mm(track_embeds, det_embeds.t())
+    def compute_embed_similarity(
+        self, 
+        track_embeds: torch.Tensor,
+        det_embeds: torch.Tensor,
+        method: str = "bisoftmax"
+    ):
+        """
+        Compute the similarity between track and detection embeddings.
 
-        return embed_costs
+        Args:
+            track_embeds (Tensor): of shape (N, C)
+            det_embeds (Tensor): of shape (M, C)
+            method (str): Method to compute the similarity: `bisoftmax`, `cosine`. Defaults to "bisoftmax".
+        """
+        if method == "cosine":
+            eps = 1e-8
+            track_embeds /= torch.clamp_min_(
+                track_embeds.norm(dim=1, keepdim=True), eps)
+            det_embeds /= torch.clamp_min_(
+                det_embeds.norm(dim=1, keepdim=True), eps)
+            embed_sims = torch.mm(track_embeds, det_embeds.t())
+        elif method == "bisoftmax":
+            feats = torch.mm(track_embeds, det_embeds.t())
+            t2d_scores = feats.softmax(dim=1)
+            d2t_scores = feats.softmax(dim=0)
+            embed_sims = (d2t_scores + t2d_scores) / 2
+
+        return embed_sims
 
     def assign_ids(
         self,
