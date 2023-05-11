@@ -1,5 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from typing import List, Union
+from typing import List, Union, Optional
 
 import numpy as np
 import torch
@@ -11,8 +11,11 @@ from mmtrack.structures import TrackDataSample
 
 
 def batch_inference_mot(
-        model: nn.Module, imgs: List[np.ndarray], frame_ids: List[int],
-        data_pipeline: Union[List[dict], Compose]) -> List[TrackDataSample]:
+        model: nn.Module, 
+        imgs: List[np.ndarray], 
+        frame_ids: List[int],
+        data_pipeline: Union[List[dict], Compose],
+        instances: Optional[List[List[dict]]] = None,) -> List[TrackDataSample]:
     """Inference image(s) with the mot model.
 
     Args:
@@ -20,6 +23,7 @@ def batch_inference_mot(
         imgs (List[np.ndarray]): Loaded images in shape (H x W x C).
         frame_ids (List[int]): List of frame id for each image.
         data_pipeline (Compose): Data processing pipeline.
+        instances (List[List[dict]]): List of instance annotations for each image.
 
     Returns:
         SampleList: The tracking data samples.
@@ -27,12 +31,17 @@ def batch_inference_mot(
     if not isinstance(data_pipeline, Compose):
         data_pipeline = Compose(data_pipeline)
 
+    if instances is None:
+        instances = [None] * len(imgs)
+
     data_samples = []
-    for frame_id, img in zip(frame_ids, imgs):
+    for frame_id, img, ins_per_frame in zip(frame_ids, imgs, instances):
         data = dict(
             img=img.astype(np.float32),
             frame_id=frame_id,
             ori_shape=img.shape[:2])
+        if ins_per_frame is not None:
+            data.update(dict(instances=ins_per_frame))
         data = data_pipeline(data)
         data_samples.append(data)
     data_samples = default_collate(data_samples)

@@ -62,7 +62,7 @@ def parse_args():
     return args
 
 
-def get_frames(data_root: str,
+def get_vid_frames(data_root: str,
                video_name: str,
                data_prefix: Optional[str] = None):
     if data_prefix is not None:
@@ -74,6 +74,27 @@ def get_frames(data_root: str,
     frames = [osp.join(video_path, frame_name) for frame_name in frames]
 
     return frames
+
+def get_vid_instances(annotations, video_id):
+    img2anns = defaultdict(list)
+    for ann in annotations['annotations']:
+        if ann['video_id'] == video_id:
+            img2anns[ann['image_id']].append(ann)
+
+    frame_id_track = -1
+    instances = []
+    for img in annotations['images']:
+        if img['video_id'] == video_id:
+            assert img['frame_id'] == frame_id_track + 1, f"Frames are not continuous {frame_id_track} -> {img['frame_id']}"
+            instances.append([dict(
+                bbox=ann['bbox'],
+                bbox_label=ann['category_id'],
+                instance_id=ann['instance_id'],
+            ) for ann in img2anns[img['id']]])
+
+            frame_id_track = img['frame_id']
+    
+    return instances
 
 
 def get_video_path(data_root: str, video_name: str):
@@ -100,24 +121,29 @@ def run_vid_test(
     model: nn.Module,
     frames: Union[Sequence[str], Sequence[Any]],
     data_pipeline: List[dict],
+    instances: Optional[List[List[dict]]] = None,
     batch_size: int = 1,
 ):
     model.eval()
 
     outputs: List[TrackDataSample] = []
-    data_iter = iter(frames)
+    frames_iter = iter(frames)
+    instances_iter = iter(instances) if instances is not None else None
     frame_id_cnt = 0
     done = False
     while not done:
         batched_frames = []
+        batched_instances = [] if instances is not None else None
         frame_ids = []
 
         for _ in range(batch_size):
             try:
-                frame = next(data_iter)
+                frame = next(frames_iter)
                 if isinstance(frame, str):
                     frame = imread(frame)
                 batched_frames.append(frame)
+                if instances is not None:
+                    batched_instances.append(next(instances_iter))
                 frame_ids.append(frame_id_cnt)
                 frame_id_cnt += 1
             except StopIteration:
@@ -126,7 +152,7 @@ def run_vid_test(
 
         if not done:
             batched_res = batch_inference_mot(model, batched_frames, frame_ids,
-                                              data_pipeline)
+                                              data_pipeline, batched_instances)
             outputs.extend(batched_res)
 
         if len(outputs) % 100 == 0:
@@ -365,15 +391,19 @@ def main(args):
         # prepare data
         annotations = load_annotations(data_cfg.data_root, data_cfg.ann_file)
 
+        require_instances = cfg.model.detector.type == 'GtDetector'
         pred_results = []
         with tqdm(annotations['videos']) as pbar:
             for vid_info in pbar:
                 pbar.set_description(f"Processing {vid_info['name']}")
 
-                frames = get_frames(data_cfg.data_root, vid_info['name'],
+                frames = get_vid_frames(data_cfg.data_root, vid_info['name'],
                                     data_cfg.data_prefix.img_path)
+                instances = get_vid_instances(annotations, vid_info['id']) if require_instances else None
+                data_pipeline = data_cfg.pipeline[1:] if require_instances else data_cfg.pipeline[2:]
                 vid_track_results = run_vid_test(model, frames,
-                                                 data_cfg.pipeline[2:],
+                                                 data_pipeline,
+                                                 instances,
                                                  args.batch_size)
 
                 for track_result in vid_track_results:
