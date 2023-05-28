@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'ReIDDataset'
-data_root = '../datasets/VTX/COMBINE_DATA_V3'
+data_root = '../datasets/VTX/REID'
 
 # data pipeline
 train_pipeline = [
@@ -34,8 +34,8 @@ train_dataloader = dict(
         type=dataset_type,
         data_root=data_root,
         triplet_sampler=dict(num_ids=8, ins_per_id=4),
-        data_prefix=dict(img_path='REID/train/imgs'),
-        ann_file='REID/train/meta.txt',
+        data_prefix=dict(img_path='train/imgs'),
+        ann_file='train/meta.txt',
         pipeline=train_pipeline))
 val_dataloader = dict(
     batch_size=1,
@@ -48,7 +48,7 @@ val_dataloader = dict(
         data_root=data_root,
         triplet_sampler=None,
         data_prefix=dict(img_path='reid/imgs'),
-        ann_file='reid/meta/val_20.txt',
+        ann_file='val/meta.txt',
         pipeline=test_pipeline))
 test_dataloader = val_dataloader
 
